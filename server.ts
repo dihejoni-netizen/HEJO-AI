@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import cookieParser from 'cookie-parser';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -6,15 +7,18 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
 import { relayRouterChat } from './relayRouter.ts';
+import { authRouter } from './server/oauthRoutes.ts';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
+const port = 3000;
 
+app.use(cookieParser());
 app.use(express.json({ limit: '15mb' }));
+app.use('/api/auth', authRouter);
 
 // Dedicated persistent directory for generated visual images
 const GENERATED_IMAGES_DIR = path.join(__dirname, 'public', 'generated-images');

@@ -1,13 +1,15 @@
 export type UserMode = 'SIMPLE' | 'CREATOR' | 'PRO';
 
 export type ActiveNavTab = 
+  | 'create'
   | 'home' 
+  | 'projects' 
+  | 'account'
   | 'ideas' 
   | 'studio' 
   | 'motion'
   | 'characters' 
   | 'products' 
-  | 'projects' 
   | 'tools';
 
 export interface PipelineIdea {
@@ -90,6 +92,12 @@ export interface PipelineShot {
   imageUrl?: string;
   image?: string;
   visualPrompt?: string;
+  imagePrompt?: string;
+  videoPrompt?: string;
+  voiceOver?: string;
+  motionSuggestion?: string;
+  negativePrompt?: string;
+  status?: 'ready' | 'needs_retry' | 'completed' | string;
   characterId?: string;
   characterName?: string;
   character?: {
@@ -133,6 +141,96 @@ export interface CreatorContext {
   [key: string]: any;
 }
 
+export interface HejoUser {
+  id: string;
+  name: string;
+  email: string;
+  picture?: string;
+  createdAt: string;
+}
+
+export interface FlowGoogleAccount {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  isActive: boolean;
+  linkedAt: string;
+}
+
+export interface AuthStatusResponse {
+  isConfigured: boolean;
+  clientId: string | null;
+  user: HejoUser | null;
+  flowAccounts: FlowGoogleAccount[];
+  activeFlowAccount: FlowGoogleAccount | null;
+}
+
+export interface GoogleFlowConnection {
+  isConnected: boolean;
+  googleEmail?: string;
+  connectedAt?: string;
+}
+
+export interface FlowReadyScene {
+  sceneNumber: number;
+  duration: string; // e.g. "10 detik"
+  storyboard: string;
+  imagePrompt: string;
+  videoPrompt: string;
+  narration: string;
+  cta?: string;
+  imageUrl?: string;
+}
+
+export interface FlowReadyData {
+  productName: string;
+  totalDuration: string; // "20 detik"
+  sceneCount: number; // 2
+  scenes: FlowReadyScene[];
+  targetAudience?: string;
+  platform?: string;
+  createdAt?: string;
+}
+
+export interface AffiliateContentItem {
+  id: string;
+  angleIndex: number;
+  angleName: string;
+  angleDescription: string;
+  hook: string;
+  scenario: string;
+  narration: string;
+  callToAction: string;
+  imagePrompt?: string;
+  videoPrompt?: string;
+  duration?: string;
+}
+
+export interface MultiAffiliatePackage {
+  productName: string;
+  contentCount: number;
+  contents: AffiliateContentItem[];
+  createdAt: string;
+}
+
+export interface PromptPackData {
+  category: 'image' | 'video' | 'affiliate' | 'ad' | 'product_photography' | 'cinematic' | 'social_media';
+  title: string;
+  promptGlobal: string;
+  promptIndo: string;
+  negativePrompt?: string;
+  aspectRatio?: string;
+  usageTips?: string;
+}
+
+export interface ImageResultData {
+  prompt: string;
+  imageUrl?: string;
+  aspectRatio?: string;
+  status: 'ready' | 'generating' | 'prompt_only';
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'hejo';
@@ -140,10 +238,18 @@ export interface ChatMessage {
   timestamp: string;
   quickActions?: string[];
   creatorContext?: CreatorContext;
+  flowReady?: FlowReadyData;
+  multiAffiliate?: MultiAffiliatePackage;
+  promptPack?: PromptPackData;
+  imageResult?: ImageResultData;
   attachedDraft?: {
-    type: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'character' | 'product';
+    type: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'character' | 'product' | 'flow_ready' | 'multi_affiliate' | 'prompt_pack' | 'image_result';
     title: string;
     content: string;
+    flowReady?: FlowReadyData;
+    multiAffiliate?: MultiAffiliatePackage;
+    promptPack?: PromptPackData;
+    imageResult?: ImageResultData;
     meta?: Record<string, any>;
   };
 }
@@ -249,6 +355,13 @@ export interface ProjectItem {
     exportUrl?: string;
   };
   videoPack?: VideoPackData;
+  narration?: {
+    script: string;
+    voiceDirection?: string;
+    tone?: string;
+    pace?: string;
+    character?: string;
+  };
 
   // Backwards compatibility data & Character linkages
   characterDnaId?: string;

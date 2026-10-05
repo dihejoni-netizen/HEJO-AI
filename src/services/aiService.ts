@@ -7,17 +7,29 @@ import {
   PipelineIdea,
   PipelineScript,
   PipelineScene,
-  PipelineShot
+  PipelineShot,
+  FlowReadyData,
+  MultiAffiliatePackage,
+  PromptPackData,
+  ImageResultData
 } from '../types';
 
 export interface ChatResponse {
   reply: string;
   suggestedActions: string[];
   updatedContext?: CreatorContext;
+  flowReady?: FlowReadyData;
+  multiAffiliate?: MultiAffiliatePackage;
+  promptPack?: PromptPackData;
+  imageResult?: ImageResultData;
   structuredDraft?: {
-    type: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'character' | 'product';
+    type: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'character' | 'product' | 'flow_ready' | 'multi_affiliate' | 'prompt_pack' | 'image_result';
     title: string;
     content: string;
+    flowReady?: FlowReadyData;
+    multiAffiliate?: MultiAffiliatePackage;
+    promptPack?: PromptPackData;
+    imageResult?: ImageResultData;
     meta?: Record<string, any>;
   } | null;
 }
@@ -45,15 +57,60 @@ export async function sendChatMessage(
     }
 
     const data = await res.json();
+    const flowReady = data.flowReady || data.structuredDraft?.flowReady || data.structuredDraft?.meta?.flowReady || null;
+    const multiAffiliate = data.multiAffiliate || data.structuredDraft?.multiAffiliate || data.structuredDraft?.meta?.multiAffiliate || null;
+    const promptPack = data.promptPack || data.structuredDraft?.promptPack || data.structuredDraft?.meta?.promptPack || null;
+    const imageResult = data.imageResult || data.structuredDraft?.imageResult || data.structuredDraft?.meta?.imageResult || null;
+
     return {
       reply: data.reply || 'Ada sedikit kendala jaringan, tapi saya tetap siap membantumu!',
       suggestedActions: data.suggestedActions || ['Coba lagi', 'Lanjut', 'Simpan ke Project'],
       updatedContext: data.updatedContext || context,
+      flowReady,
+      multiAffiliate,
+      promptPack,
+      imageResult,
       structuredDraft: data.structuredDraft || null,
     };
   } catch (err: any) {
     console.info('Transient client fetch notice, using local co-creator response:', err?.message || err);
     const text = message.toLowerCase();
+
+    if (text.includes('motion_context:') || text.includes('motion_context')) {
+      const lines = message.split('\n');
+      const data: Record<string, string> = {};
+      for (const l of lines) {
+        if (l.includes('=')) {
+          const [k, ...rest] = l.split('=');
+          data[k.trim().toLowerCase()] = rest.join('=').trim();
+        }
+      }
+      const preset = data.preset || 'Slow Push-in (Dolly In)';
+      const angle = data.angle || 'Eye Level';
+      const speed = data.speed || 'Normal';
+      const subject = data.subject || context.karakter || context.produk || 'subjek adegan';
+
+      return {
+        reply: `Gerakan kamera "${preset}" (${angle}, tempo ${speed}) berhasil diterapkan untuk ${subject}. Kamera akan bergerak stabil dan terarah sesuai kebutuhan adegan video.`,
+        suggestedActions: ['🎬 Buka Studio Video', '🎥 Lihat Shot List', '✨ Buat Semua Visual', '🔄 Ubah Motion'],
+        updatedContext: {
+          ...context,
+          motion: {
+            preset,
+            cameraMovement: preset,
+            angle,
+            speed,
+            subject,
+          },
+        },
+        structuredDraft: {
+          type: 'shotlist',
+          title: `Motion Kamera: ${preset}`,
+          content: `Preset: ${preset}\nSudut: ${angle}\nKecepatan: ${speed}\nSubjek: ${subject}`,
+          meta: data,
+        },
+      };
+    }
     if (text.includes('laundry')) {
       const targetLabel = text.includes('mahasiswa') ? 'mahasiswa' : (context.targetAudiens || 'pelanggan baru');
       return {

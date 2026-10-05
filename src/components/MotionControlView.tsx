@@ -18,6 +18,7 @@ import {
   Film
 } from 'lucide-react';
 import { CreatorContext, UserMode, ProjectItem } from '../types';
+import { formatMotionContextString } from '../utils/motionHelper';
 
 interface MotionControlViewProps {
   userMode: UserMode;
@@ -153,11 +154,31 @@ ${creatorContext.karakter ? `- Karakter Pembawa: ${creatorContext.karakter}` : '
   };
 
   const handleApplyToChat = () => {
+    const intensityLabel = speedIntensity === 'fast' ? 'Tinggi' : speedIntensity === 'slow' ? 'Halus' : 'Normal';
+    const structuredMotionText = formatMotionContextString({
+      preset: selectedPreset.name,
+      angle: currentAngleLabel,
+      speed: currentSpeedLabel,
+      intensity: intensityLabel,
+      subject: subjectInput || creatorContext.karakter || creatorContext.produk || 'subjek utama',
+      scene: 'scene aktif',
+    });
+
+    if (saveProject && activeProject) {
+      saveProject({
+        id: activeProject.id,
+        title: activeProject.title,
+        motion: {
+          preset: selectedPreset.name,
+          cameraMovement: selectedPreset.name,
+          customPrompt: generatedPromptGlobal,
+        },
+      });
+    }
+
     if (onSendDraftToChat) {
-      onSendDraftToChat(
-        `Tolong terapkan gerakan kamera "${selectedPreset.name}" (${currentAngleLabel}, tempo ${speedIntensity}) untuk adegan video ${creatorContext.produk || 'konten'} kita.`
-      );
-      showToast('Kamera motion dikirim ke percakapan HEJO!');
+      onSendDraftToChat(structuredMotionText);
+      showToast('Kamera motion terstruktur dikirim ke percakapan HEJO!');
     }
   };
 

@@ -6,9 +6,12 @@ import {
   ProjectItem, 
   CharacterDNA, 
   ProductDNA, 
-  IdeaCard,
-  CreatorContext,
-  PipelineShot 
+  IdeaCard, 
+  CreatorContext, 
+  PipelineShot,
+  GoogleFlowConnection,
+  HejoUser,
+  FlowGoogleAccount
 } from '../types';
 import { getAllVisualImagesFromDb, saveVisualImageToDb } from '../services/imageStorage';
 
@@ -433,6 +436,115 @@ export function useWorkspaceStore() {
   });
 
   const [toast, setToast] = useState<string | null>(null);
+
+  // Status Otentikasi Pengguna HEJO & Akun Google Flow (Multi-Account)
+  const [hejoUser, setHejoUser] = useState<HejoUser | null>(null);
+  const [flowAccounts, setFlowAccounts] = useState<FlowGoogleAccount[]>([]);
+  const [isOAuthConfigured, setIsOAuthConfigured] = useState<boolean>(false);
+  const [oauthClientId, setOauthClientId] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+
+  const fetchAuthStatus = async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setIsOAuthConfigured(Boolean(data.isConfigured));
+        setOauthClientId(data.clientId || null);
+        setHejoUser(data.user || null);
+        if (Array.isArray(data.flowAccounts)) {
+          setFlowAccounts(data.flowAccounts);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch auth status:', e);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAuthStatus();
+  }, []);
+
+  const activeFlowAccount: FlowGoogleAccount | null = 
+    flowAccounts.find((a) => a.isActive) || flowAccounts[0] || null;
+
+  // Status Koneksi Google / Flow (Backward-compatible adapter)
+  const googleFlowConnection: GoogleFlowConnection = activeFlowAccount
+    ? {
+        isConnected: true,
+        googleEmail: activeFlowAccount.email,
+        connectedAt: activeFlowAccount.linkedAt,
+      }
+    : {
+        isConnected: false,
+      };
+
+  const setActiveFlowAccount = async (accountId: string) => {
+    try {
+      const res = await fetch('/api/auth/flow-accounts/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.flowAccounts)) {
+          setFlowAccounts(data.flowAccounts);
+        }
+        const activeAcc = data.flowAccounts?.find((a: any) => a.id === accountId);
+        showToast(`Akun aktif Flow: ${activeAcc?.email || 'diperbarui'}`);
+      }
+    } catch {
+      showToast('Gagal mengubah akun aktif.');
+    }
+  };
+
+  const removeFlowAccount = async (accountId: string) => {
+    try {
+      const res = await fetch(`/api/auth/flow-accounts/${accountId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.flowAccounts)) {
+          setFlowAccounts(data.flowAccounts);
+        }
+        showToast('Koneksi akun Flow berhasil dihapus.');
+      }
+    } catch {
+      showToast('Gagal menghapus akun Flow.');
+    }
+  };
+
+  const logoutHejo = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      setHejoUser(null);
+      setFlowAccounts([]);
+      showToast('Berhasil keluar dari akun HEJO.');
+    } catch {
+      showToast('Gagal keluar.');
+    }
+  };
+
+  const connectGoogleFlow = (email: string) => {
+    const cleanEmail = email.trim();
+    if (isOAuthConfigured) {
+      window.location.href = '/api/auth/google/link-flow';
+    } else {
+      showToast('Google OAuth belum dikonfigurasi di server (.env).');
+    }
+  };
+
+  const disconnectGoogleFlow = () => {
+    if (activeFlowAccount) {
+      removeFlowAccount(activeFlowAccount.id);
+    } else {
+      showToast('Belum ada akun Flow yang terhubung.');
+    }
+  };
 
   // Restore heavy visual images from IndexedDB across page reloads
   useEffect(() => {
@@ -916,5 +1028,18 @@ export function useWorkspaceStore() {
     setCreatorContext,
     toast,
     showToast,
+    googleFlowConnection,
+    connectGoogleFlow,
+    disconnectGoogleFlow,
+    hejoUser,
+    flowAccounts,
+    activeFlowAccount,
+    isOAuthConfigured,
+    oauthClientId,
+    isAuthLoading,
+    fetchAuthStatus,
+    setActiveFlowAccount,
+    removeFlowAccount,
+    logoutHejo,
   };
 }

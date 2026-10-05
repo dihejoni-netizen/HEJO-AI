@@ -13,7 +13,9 @@ import { ProductDNAView } from './components/ProductDNAView';
 import { ProjectLibraryView } from './components/ProjectLibraryView';
 import { CreativeToolsView } from './components/CreativeToolsView';
 import { MotionControlView } from './components/MotionControlView';
+import { AccountView } from './components/AccountView';
 import { UpdateCenterModal } from './components/UpdateCenterModal';
+import { GoogleFlowModal } from './components/GoogleFlowModal';
 import { Toast } from './components/Toast';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { CharacterDNA, IdeaCard, ProductDNA } from './types';
@@ -22,6 +24,7 @@ import { sendChatMessage } from './services/aiService';
 export default function App() {
   const store = useWorkspaceStore();
   const [isUpdateCenterOpen, setIsUpdateCenterOpen] = useState(false);
+  const [isGoogleFlowModalOpen, setIsGoogleFlowModalOpen] = useState(false);
 
   // Cross-view actions
   const handleOpenProjectInStudio = (title: string, script?: string) => {
@@ -137,6 +140,10 @@ export default function App() {
         text: response.reply,
         quickActions: response.suggestedActions,
         attachedDraft: response.structuredDraft || undefined,
+        flowReady: response.flowReady || response.structuredDraft?.flowReady || response.structuredDraft?.meta?.flowReady || undefined,
+        multiAffiliate: response.multiAffiliate || response.structuredDraft?.multiAffiliate || response.structuredDraft?.meta?.multiAffiliate || undefined,
+        promptPack: response.promptPack || response.structuredDraft?.promptPack || response.structuredDraft?.meta?.promptPack || undefined,
+        imageResult: response.imageResult || response.structuredDraft?.imageResult || response.structuredDraft?.meta?.imageResult || undefined,
         creatorContext: mergedContext,
       });
     } catch {
@@ -159,6 +166,8 @@ export default function App() {
         projectCount={store.projects.length}
         onOpenUpdateCenter={() => setIsUpdateCenterOpen(true)}
         activeProjectName={store.activeProject?.name || store.activeProject?.title}
+        connection={store.googleFlowConnection}
+        onOpenConnectionModal={() => setIsGoogleFlowModalOpen(true)}
       />
 
       {/* Main View Area */}
@@ -177,6 +186,8 @@ export default function App() {
             setActiveProjectId={store.setActiveProjectId}
             creatorContext={store.creatorContext}
             setCreatorContext={store.setCreatorContext}
+            connection={store.googleFlowConnection}
+            onOpenConnectionModal={() => setIsGoogleFlowModalOpen(true)}
           />
         )}
 
@@ -267,6 +278,22 @@ export default function App() {
             onSendDraftToChat={handleSendDraftToChat}
           />
         )}
+
+        {store.activeTab === 'account' && (
+          <AccountView
+            user={store.hejoUser}
+            flowAccounts={store.flowAccounts}
+            activeFlowAccount={store.activeFlowAccount}
+            isOAuthConfigured={store.isOAuthConfigured}
+            onSetActiveFlowAccount={store.setActiveFlowAccount}
+            onRemoveFlowAccount={store.removeFlowAccount}
+            onLogout={store.logoutHejo}
+            connection={store.googleFlowConnection}
+            projectCount={store.projects.length}
+            setActiveTab={store.setActiveTab}
+            showToast={store.showToast}
+          />
+        )}
       </main>
 
       {/* Footer */}
@@ -297,6 +324,15 @@ export default function App() {
       <UpdateCenterModal
         isOpen={isUpdateCenterOpen}
         onClose={() => setIsUpdateCenterOpen(false)}
+      />
+
+      <GoogleFlowModal
+        isOpen={isGoogleFlowModalOpen}
+        onClose={() => setIsGoogleFlowModalOpen(false)}
+        connection={store.googleFlowConnection}
+        onConnect={store.connectGoogleFlow}
+        onDisconnect={store.disconnectGoogleFlow}
+        showToast={store.showToast}
       />
 
       <Toast message={store.toast} />

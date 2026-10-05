@@ -24,10 +24,14 @@ import {
   GraduationCap,
   Smile
 } from 'lucide-react';
-import { ActiveNavTab, ChatMessage, ProjectItem, UserMode, CreatorContext } from '../types';
+import { ActiveNavTab, ChatMessage, ProjectItem, UserMode, CreatorContext, GoogleFlowConnection } from '../types';
 import { sendChatMessage } from '../services/aiService';
 import { calculateProjectProgress } from '../utils/projectProgress';
 import { NewProjectModal } from './NewProjectModal';
+import { FlowReadyCard } from './FlowReadyCard';
+import { MultiContentAffiliateCard } from './MultiContentAffiliateCard';
+import { PromptPackCard } from './PromptPackCard';
+import { ImageResultCard } from './ImageResultCard';
 
 interface HomeGardenProps {
   userMode: UserMode;
@@ -42,6 +46,8 @@ interface HomeGardenProps {
   setActiveProjectId?: (id: string | null) => void;
   creatorContext?: CreatorContext;
   setCreatorContext?: React.Dispatch<React.SetStateAction<CreatorContext>>;
+  connection?: GoogleFlowConnection;
+  onOpenConnectionModal?: () => void;
 }
 
 export const HomeGarden: React.FC<HomeGardenProps> = ({
@@ -57,6 +63,8 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
   setActiveProjectId,
   creatorContext = {},
   setCreatorContext,
+  connection,
+  onOpenConnectionModal,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -122,6 +130,52 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
     }
   };
 
+  const handleCreateVideoAuto = (customPrompt?: string) => {
+    const promptToUse = (customPrompt || inputText).trim();
+    if (!promptToUse) return;
+
+    const title = promptToUse.length > 50 ? promptToUse.slice(0, 50) + '...' : promptToUse;
+    const isTiktok = /tiktok/i.test(promptToUse);
+    const isReels = /reels|instagram/i.test(promptToUse);
+    const detectedPlatform = isTiktok ? 'TikTok' : isReels ? 'Instagram Reels' : 'TikTok';
+    const detectedTarget = /mahasiswa/i.test(promptToUse)
+      ? 'Mahasiswa'
+      : /pekerja/i.test(promptToUse)
+      ? 'Pekerja Kantor'
+      : /anak muda/i.test(promptToUse)
+      ? 'Anak Muda'
+      : 'Audiens Umum';
+
+    // 1. Create or save project
+    saveProject({
+      title: title,
+      name: title,
+      description: promptToUse,
+      category: 'video',
+      status: 'in_progress',
+      currentStage: 'idea',
+      tags: ['Video AI', detectedPlatform],
+    });
+
+    // 2. Set creatorContext with auto-run pipeline trigger
+    if (setCreatorContext) {
+      setCreatorContext((prev) => ({
+        ...prev,
+        produk: promptToUse,
+        tujuan: 'video promosi',
+        platform: detectedPlatform,
+        targetAudiens: detectedTarget,
+        durasi: '30 detik',
+        pipelineStage: 'idea',
+        autoRunPipeline: true,
+        rawPrompt: promptToUse,
+      }));
+    }
+
+    showToast('✨ HEJO menyiapkan alur video otomatis untukmu...');
+    setActiveTab('studio');
+  };
+
   const handleSendMessage = async (customText?: string) => {
     if (isSubmittingRef.current || isLoading) return;
 
@@ -166,6 +220,10 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
         text: response.reply,
         quickActions: response.suggestedActions,
         attachedDraft: response.structuredDraft || undefined,
+        flowReady: response.flowReady || response.structuredDraft?.flowReady || response.structuredDraft?.meta?.flowReady || undefined,
+        multiAffiliate: response.multiAffiliate || response.structuredDraft?.multiAffiliate || response.structuredDraft?.meta?.multiAffiliate || undefined,
+        promptPack: response.promptPack || response.structuredDraft?.promptPack || response.structuredDraft?.meta?.promptPack || undefined,
+        imageResult: response.imageResult || response.structuredDraft?.imageResult || response.structuredDraft?.meta?.imageResult || undefined,
         creatorContext: mergedContext,
       });
     } catch {
@@ -180,6 +238,47 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
       setTimeout(() => {
         chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
+    }
+  };
+
+  const handleActionPrompt = () => {
+    const text = inputText.trim();
+    if (text) {
+      if (/prompt/i.test(text)) {
+        handleSendMessage(text);
+      } else {
+        handleSendMessage(`Buat prompt untuk: ${text}`);
+      }
+    } else {
+      handleSendMessage('Buat prompt visual, video, dan konten affiliate untuk produk saya.');
+    }
+  };
+
+  const handleActionImage = () => {
+    const text = inputText.trim();
+    if (text) {
+      if (/gambar/i.test(text)) {
+        handleSendMessage(text);
+      } else {
+        handleSendMessage(`Buat gambar produk ini terlihat premium: ${text}`);
+      }
+    } else {
+      setInputText('Buat gambar produk ini terlihat premium: ');
+      textareaRef.current?.focus();
+      showToast('Apa yang ingin kamu lihat? Tuliskan deskripsi produk atau suasana visual lalu tekan Buat Gambar.');
+    }
+  };
+
+  const handleActionVideo = () => {
+    const text = inputText.trim();
+    if (text) {
+      if (/video|detik|affiliate/i.test(text)) {
+        handleSendMessage(text);
+      } else {
+        handleSendMessage(`Buat video affiliate untuk ${text} 20 detik.`);
+      }
+    } else {
+      handleSendMessage('Buat video affiliate produk ini 20 detik.');
     }
   };
 
@@ -230,10 +329,30 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
       icon: '📦',
       action: () => handleSendMessage('📦 Saya mau membuat konten produk'),
     },
+    {
+      id: 'affiliate',
+      label: 'Video Affiliate 20s (Flow)',
+      icon: '🚀',
+      action: () => handleSendMessage('Buat video affiliate produk ini 20 detik.'),
+    },
   ];
 
   const handleActionClick = (action: string) => {
     if (isSubmittingRef.current || isLoading) return;
+
+    if (action.includes('Lanjut ke Flow') || action.includes('Buka Flow')) {
+      const lastMsgWithFlow = [...chatMessages].reverse().find((m) => m.flowReady || m.attachedDraft?.flowReady);
+      if (lastMsgWithFlow?.attachedDraft?.content) {
+        navigator.clipboard.writeText(lastMsgWithFlow.attachedDraft.content);
+      }
+      try {
+        window.open('https://labs.google/flow', '_blank', 'noopener,noreferrer');
+        showToast('🚀 Membuka Flow AI di tab baru! Seluruh prompt sudah disalin.');
+      } catch {
+        showToast('Izinkan pop-up browser untuk membuka Flow.');
+      }
+      return;
+    }
 
     if (action.includes('Karakter') && (action.includes('Buka') || action.includes('DNA') || action.includes('Saya'))) {
       setActiveTab('characters');
@@ -312,27 +431,18 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
 
   return (
     <div className="space-y-12 pb-16">
-      {/* 1. BAGIAN UTAMA BERANDA */}
+      {/* 1. BAGIAN UTAMA BERANDA: SIMPLE OUTSIDE, POWERFUL INSIDE */}
       <section className="text-center pt-4 sm:pt-8 max-w-3xl mx-auto px-4">
-        {/* Subtle decorative leaf badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100/70 border border-emerald-200 text-emerald-800 text-xs font-semibold mb-3">
-          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Taman Kreator · Canggih di belakang, sederhana di depan</span>
-        </div>
-
-        <h1 className="text-3xl sm:text-5xl font-extrabold text-stone-900 tracking-tight font-serif">
-          HEJO AI
+        {/* Judul Besar & Subjudul Sederhana (Requirement 2) */}
+        <h1 className="text-3xl sm:text-5xl font-black text-stone-900 tracking-tight">
+          Apa yang ingin kamu buat?
         </h1>
-        <p className="mt-1 text-lg sm:text-xl font-bold text-emerald-700">
-          “Bikin Konten Jadi Mudah”
-        </p>
-        
-        <p className="mt-3 text-stone-600 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
-          Ceritakan saja apa yang ingin kamu buat. HEJO akan membantu dari ide sampai menjadi karya.
+        <p className="mt-2 text-stone-600 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
+          Ceritakan saja. HEJO akan membantu menyiapkan semuanya.
         </p>
 
-        {/* Kotak Percakapan Utama yang Besar dan Mudah Digunakan */}
-        <div className="mt-7 text-left">
+        {/* SATU KOTAK INPUT/CHAT UTAMA (Requirement 2) */}
+        <div className="mt-6 text-left">
           <div className="bg-white border-2 border-emerald-500/50 focus-within:border-emerald-600 rounded-3xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all">
             <div className="relative">
               <textarea
@@ -340,7 +450,7 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ceritakan apa yang ingin kamu buat..."
+                placeholder="Contoh: Buat 5 video affiliate untuk produk ini, masing-masing 20 detik..."
                 rows={3}
                 className="w-full text-stone-800 placeholder-stone-400 bg-transparent resize-none focus:outline-none text-base sm:text-lg leading-relaxed pr-10"
               />
@@ -352,88 +462,85 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
               )}
             </div>
 
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-100">
-              {/* Tombol 🎤 Bicara */}
+            {/* 3 Contoh Sederhana */}
+            <div className="flex items-center gap-2 text-xs text-stone-500 mt-2.5 pt-1.5 flex-wrap border-t border-stone-100">
+              <span className="font-bold text-stone-400">Contoh:</span>
+              {[
+                'Buat video affiliate untuk produk ini',
+                'Buat gambar produk ini',
+                'Buat prompt video',
+              ].map((ex, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setInputText(ex)}
+                  className="text-stone-600 hover:text-emerald-800 hover:bg-emerald-50 px-2.5 py-1 rounded-lg border border-stone-200/80 hover:border-emerald-300 transition-colors cursor-pointer text-left font-medium text-[11px] sm:text-xs"
+                >
+                  “{ex}”
+                </button>
+              ))}
+            </div>
+
+            {/* Bottom Bar: Tombol Bicara & Tombol Kirim */}
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-100 flex-wrap gap-2">
               <button
                 type="button"
                 onClick={toggleListening}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   isListening
                     ? 'bg-rose-500 text-white shadow-sm ring-2 ring-rose-300'
                     : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
                 }`}
                 title="Bicara dengan Mikrofon"
               >
-                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-emerald-600" />}
-                <span>{isListening ? 'Selesai Bicara' : '🎤 Bicara'}</span>
+                {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-600" />}
+                <span>{isListening ? 'Selesai' : '🎤 Bicara'}</span>
               </button>
 
-              {/* Tombol ✨ Buatkan */}
               <button
+                type="button"
                 onClick={() => handleSendMessage()}
                 disabled={!inputText.trim() || isLoading}
-                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-stone-200 disabled:text-stone-400 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm shadow-emerald-700/20 transition-all cursor-pointer disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
               >
-                {isLoading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Membuatkan...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-emerald-200" />
-                    <span>✨ Buatkan</span>
-                  </>
-                )}
+                <span>Kirim</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* 2. PILIHAN CEPAT (Di bawah kotak percakapan) */}
-        <div className="mt-5">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2.5 text-left">
-            Pilihan Cepat:
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-left">
-            {quickChoices.map((choice) => (
-              <button
-                key={choice.id}
-                onClick={choice.action}
-                className="p-3 bg-white border border-stone-200 rounded-xl hover:border-emerald-500 hover:bg-emerald-50/40 hover:shadow-xs transition-all flex items-center gap-2.5 group cursor-pointer"
-              >
-                <span className="text-xl group-hover:scale-110 transition-transform">
-                  {choice.icon}
-                </span>
-                <span className="font-semibold text-xs sm:text-sm text-stone-800 group-hover:text-emerald-800">
-                  {choice.label}
-                </span>
-              </button>
-            ))}
-          </div>
+        {/* HANYA 3 AKSI UTAMA (Requirement 3) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-left">
+          <button
+            type="button"
+            onClick={handleActionPrompt}
+            disabled={isLoading}
+            className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-white border-2 border-stone-200/90 hover:border-indigo-500 hover:bg-indigo-50/40 shadow-xs hover:shadow-md transition-all font-black text-stone-800 hover:text-indigo-900 cursor-pointer active:scale-[0.98] group"
+          >
+            <span className="text-xl group-hover:scale-110 transition-transform">📝</span>
+            <span className="text-xs sm:text-sm tracking-wide">BUAT PROMPT</span>
+          </button>
 
-          {/* 3. “SAYA BELUM TAHU” */}
-          <div className="mt-3">
-            <button
-              onClick={() => handleSendMessage('🤷 Saya belum tahu mau membuat apa')}
-              className="w-full p-3 bg-gradient-to-r from-amber-50 to-emerald-50/60 border border-amber-200/80 hover:border-emerald-500 rounded-xl transition-all flex items-center justify-between group text-left cursor-pointer"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="text-2xl group-hover:scale-110 transition-transform">
-                  🤷
-                </span>
-                <div>
-                  <span className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-emerald-900">
-                    Saya belum tahu mau membuat apa
-                  </span>
-                  <p className="text-[11px] text-stone-500">
-                    Tidak masalah! HEJO akan bertanya ramah untuk membantumu menemukan ide.
-                  </p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-emerald-700 opacity-80 group-hover:translate-x-1 transition-all" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleActionImage}
+            disabled={isLoading}
+            className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-white border-2 border-stone-200/90 hover:border-emerald-500 hover:bg-emerald-50/40 shadow-xs hover:shadow-md transition-all font-black text-stone-800 hover:text-emerald-900 cursor-pointer active:scale-[0.98] group"
+          >
+            <span className="text-xl group-hover:scale-110 transition-transform">🖼️</span>
+            <span className="text-xs sm:text-sm tracking-wide">BUAT GAMBAR</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleActionVideo}
+            disabled={isLoading}
+            className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-700/20 transition-all font-black text-xs sm:text-sm tracking-wide cursor-pointer hover:scale-[1.01] active:scale-[0.98] group"
+          >
+            <span className="text-xl group-hover:scale-110 transition-transform">🎬</span>
+            <span>BUAT VIDEO</span>
+          </button>
         </div>
       </section>
 
@@ -504,8 +611,130 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
                   >
                     <p className="whitespace-pre-line">{msg.text}</p>
 
+                    {/* FLOW READY CARD (Requirement 4 & 5) */}
+                    {(msg.flowReady || msg.attachedDraft?.type === 'flow_ready' || msg.attachedDraft?.flowReady || msg.attachedDraft?.meta?.flowReady) && (
+                      <FlowReadyCard
+                        data={
+                          msg.flowReady ||
+                          msg.attachedDraft?.flowReady ||
+                          msg.attachedDraft?.meta?.flowReady || {
+                            productName: 'Produk Rekomendasi Affiliate',
+                            totalDuration: '20 detik',
+                            sceneCount: 2,
+                            scenes: [],
+                          }
+                        }
+                        connection={connection}
+                        onOpenConnectionModal={onOpenConnectionModal}
+                        onSaveToProject={(flowData) => {
+                          saveProject({
+                            title: `Video Affiliate: ${flowData.productName}`,
+                            description: `${flowData.sceneCount} Scene · ${flowData.totalDuration} (Siap untuk Flow)`,
+                            category: 'video',
+                            status: 'ready',
+                            script: msg.attachedDraft?.content || undefined,
+                            tags: ['Affiliate', 'Flow AI'],
+                          });
+                        }}
+                        onOpenStudio={(flowData) => {
+                          onOpenProjectInStudio(
+                            `Video Affiliate: ${flowData.productName}`,
+                            msg.attachedDraft?.content
+                          );
+                        }}
+                        showToast={showToast}
+                      />
+                    )}
+
+                    {/* MULTI-CONTENT AFFILIATE CARD (Requirement 4) */}
+                    {(msg.multiAffiliate || msg.attachedDraft?.type === 'multi_affiliate' || msg.attachedDraft?.multiAffiliate || msg.attachedDraft?.meta?.multiAffiliate) && (
+                      <MultiContentAffiliateCard
+                        data={
+                          msg.multiAffiliate ||
+                          msg.attachedDraft?.multiAffiliate ||
+                          msg.attachedDraft?.meta?.multiAffiliate!
+                        }
+                        onSelectContentForVideo={(item) => {
+                          handleSendMessage(`Buat video affiliate untuk konten ini: "${item.hook}" dengan durasi 20 detik.`);
+                        }}
+                        onSaveToProject={(multiData) => {
+                          saveProject({
+                            title: `Paket Affiliate: ${multiData.productName}`,
+                            description: `1 Produk → ${multiData.contentCount} Konten Berbeda`,
+                            category: 'campaign',
+                            status: 'ready',
+                            script: msg.attachedDraft?.content || undefined,
+                            tags: ['Affiliate', 'Multi Content'],
+                          });
+                          showToast(`Paket ${multiData.contentCount} konten affiliate disimpan ke Project!`);
+                        }}
+                        showToast={showToast}
+                      />
+                    )}
+
+                    {/* PROMPT PACK CARD (Requirement 9) */}
+                    {(msg.promptPack || msg.attachedDraft?.type === 'prompt_pack' || msg.attachedDraft?.promptPack || msg.attachedDraft?.meta?.promptPack) && (
+                      <PromptPackCard
+                        data={
+                          msg.promptPack ||
+                          msg.attachedDraft?.promptPack ||
+                          msg.attachedDraft?.meta?.promptPack!
+                        }
+                        onSaveToProject={() => {
+                          const pack = msg.promptPack || msg.attachedDraft?.promptPack || msg.attachedDraft?.meta?.promptPack!;
+                          saveProject({
+                            title: pack.title,
+                            description: `Kategori: ${pack.category} · Prompt Global & Panduan Indonesia`,
+                            category: 'video',
+                            status: 'draft',
+                            script: msg.attachedDraft?.content || pack.promptGlobal,
+                            tags: ['Prompt Pack', pack.category],
+                          });
+                          showToast('Prompt berhasil disimpan ke Project!');
+                        }}
+                        onGenerateVideoFromPrompt={(p) => {
+                          handleSendMessage(`Buat video affiliate 20 detik berdasarkan prompt ini: ${p}`);
+                        }}
+                        showToast={showToast}
+                      />
+                    )}
+
+                    {/* IMAGE RESULT CARD (Requirement 8) */}
+                    {(msg.imageResult || msg.attachedDraft?.type === 'image_result' || msg.attachedDraft?.imageResult || msg.attachedDraft?.meta?.imageResult) && (
+                      <ImageResultCard
+                        data={
+                          msg.imageResult ||
+                          msg.attachedDraft?.imageResult ||
+                          msg.attachedDraft?.meta?.imageResult!
+                        }
+                        onGenerateVideo={(p) => {
+                          handleSendMessage(`Buat video affiliate 20 detik berdasarkan visual ini: ${p}`);
+                        }}
+                        onSaveToProject={() => {
+                          const img = msg.imageResult || msg.attachedDraft?.imageResult || msg.attachedDraft?.meta?.imageResult!;
+                          saveProject({
+                            title: `Visual: ${img.prompt.slice(0, 35)}...`,
+                            description: `Prompt: ${img.prompt}`,
+                            category: 'video',
+                            status: 'draft',
+                            tags: ['Visual', 'Gambar'],
+                          });
+                          showToast('Visual berhasil disimpan ke Project!');
+                        }}
+                        showToast={showToast}
+                      />
+                    )}
+
                     {/* Attached Structured Draft Preview (Creator Engine Pipeline) */}
-                    {msg.attachedDraft && (
+                    {msg.attachedDraft && 
+                      msg.attachedDraft.type !== 'flow_ready' && 
+                      msg.attachedDraft.type !== 'multi_affiliate' && 
+                      msg.attachedDraft.type !== 'prompt_pack' && 
+                      msg.attachedDraft.type !== 'image_result' && 
+                      !msg.flowReady && 
+                      !msg.multiAffiliate && 
+                      !msg.promptPack && 
+                      !msg.imageResult && (
                       <div className="mt-4 p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-stone-800 shadow-xs">
                         <div className="flex items-center justify-between mb-2.5">
                           <div className="flex items-center gap-2">
@@ -655,6 +884,10 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {recentProjects.map((project) => {
               const prog = calculateProjectProgress(project);
+              const productName = (project as any).productName || project.tags?.find(t => t.startsWith('Produk:'))?.replace('Produk:', '') || 'Produk Affiliate';
+              const contentType = project.category === 'campaign' ? 'Paket Affiliate' : project.category === 'video' ? 'Video Affiliate' : 'Konten Kreatif';
+              const contentCount = project.pipelineShots?.length ? `${project.pipelineShots.length} Scene` : project.description?.match(/(\d+)\s*(scene|konten)/i)?.[0] || '1 Konten';
+              const statusLabel = project.status === 'ready' ? 'Siap Produksi' : project.status === 'completed' ? 'Selesai' : 'Sedang Dikerjakan';
 
               return (
                 <div
@@ -662,44 +895,41 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
                   onClick={() => handleOpenExistingProject(project)}
                   className="p-4 bg-white border border-stone-200 rounded-2xl hover:border-emerald-500 hover:shadow-sm transition-all text-left group cursor-pointer flex flex-col justify-between"
                 >
-                  <div>
-                    <div className="flex items-center justify-between text-[11px] text-stone-400 mb-1.5">
-                      <span className="font-semibold text-emerald-700 uppercase tracking-wider text-[10px]">
-                        {project.category}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-[11px] text-stone-400">
+                      <span className="font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">
+                        {contentType}
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         <span>{project.updatedAt}</span>
                       </span>
                     </div>
-                    <h3 className="font-bold text-stone-900 text-sm group-hover:text-emerald-800 transition-colors line-clamp-1">
+
+                    <h3 className="font-extrabold text-stone-900 text-sm group-hover:text-emerald-800 transition-colors line-clamp-1">
                       {project.name || project.title}
                     </h3>
-                    <p className="text-xs text-stone-500 mt-1 line-clamp-2 leading-relaxed">
-                      {project.description}
-                    </p>
 
-                    {/* Progress chips */}
-                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
-                      <span className={`px-1.5 py-0.5 rounded font-bold ${
-                        prog.visualImagesCount >= prog.totalShotsCount
-                          ? 'bg-emerald-100 text-emerald-900'
-                          : prog.visualImagesCount > 0
-                          ? 'bg-amber-100 text-amber-900'
-                          : 'bg-stone-100 text-stone-500'
-                      }`}>
-                        Visual {prog.visualImagesCount}/{prog.totalShotsCount}
-                      </span>
-
-                      <span className="px-1.5 py-0.5 rounded font-bold bg-stone-100 text-stone-600">
-                        Motion {prog.motionCount}/{prog.totalShotsCount}
-                      </span>
+                    {/* Informasi Ringkas: Produk, Jumlah Konten, Status */}
+                    <div className="text-xs text-stone-600 space-y-1.5 bg-stone-50/80 p-2.5 rounded-xl border border-stone-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-stone-400 text-[11px]">Produk:</span>
+                        <span className="font-bold text-stone-800 truncate max-w-[140px]">{productName}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-stone-400 text-[11px]">Jumlah Konten:</span>
+                        <span className="font-semibold text-stone-800">{contentCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-stone-200/60">
+                        <span className="text-stone-400 text-[11px]">Status:</span>
+                        <span className="font-bold text-emerald-700">{statusLabel} ({prog.overallPercent}%)</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between text-[11px] text-emerald-700 font-bold group-hover:text-emerald-900">
-                    <span>Lanjutkan Project</span>
-                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                  <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-emerald-700 font-bold group-hover:text-emerald-900">
+                    <span>Lanjutkan</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </div>
               );

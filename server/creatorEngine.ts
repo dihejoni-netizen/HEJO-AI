@@ -13,11 +13,19 @@ export interface CreatorEngineResponse {
   suggestedActions: string[];
   updatedContext: CreatorContext;
   structuredDraft?: {
-    type: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'character' | 'product';
+    type: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'character' | 'product' | 'flow_ready' | 'multi_affiliate' | 'prompt_pack' | 'image_result';
     title: string;
     content: string;
+    flowReady?: any;
+    multiAffiliate?: any;
+    promptPack?: any;
+    imageResult?: any;
     meta?: Record<string, any>;
   } | null;
+  flowReady?: any;
+  multiAffiliate?: any;
+  promptPack?: any;
+  imageResult?: any;
 }
 
 function capitalize(str: string): string {
@@ -28,6 +36,416 @@ function capitalize(str: string): string {
     .join(' ');
 }
 
+// Handler khusus Affiliate & Flow Ready (Requirement 3 & 4)
+function generateAffiliateFlowPackage(
+  message: string,
+  ctx: CreatorContext
+): CreatorEngineResponse {
+  const text = message.toLowerCase().trim();
+
+  // 1. Duration & Scene calculation
+  // "Buat video affiliate produk ini 20 detik." -> 20s -> 2 scene x 10 detik
+  const durationMatch = text.match(/(\d+)\s*(detik|det|s|second)/i);
+  let totalSeconds = durationMatch ? parseInt(durationMatch[1], 10) : 20;
+  if (isNaN(totalSeconds) || totalSeconds <= 0) totalSeconds = 20;
+
+  // Tiap scene 10 detik sesuai spesifikasi ekosistem Flow di HEJO
+  const sceneCount = Math.max(1, Math.round(totalSeconds / 10));
+  const normalizedDuration = `${sceneCount * 10} detik`;
+
+  // 2. Deteksi Nama Produk
+  let productName = ctx.produk || '';
+  if (!productName || productName.toLowerCase() === 'produk ini' || productName.toLowerCase() === 'produk') {
+    const cleaned = message
+      .replace(/buat\s+video\s+affiliate/gi, '')
+      .replace(/video\s+affiliate/gi, '')
+      .replace(/affiliate/gi, '')
+      .replace(/produk\s+ini/gi, '')
+      .replace(/buatkan/gi, '')
+      .replace(/tolong/gi, '')
+      .replace(/\d+\s*(detik|det|s|second)/gi, '')
+      .replace(/untuk/gi, '')
+      .trim();
+
+    if (cleaned.length > 2) {
+      productName = cleaned;
+    } else {
+      productName = 'Produk Pilihan Affiliate';
+    }
+  }
+
+  const scenes = [];
+  for (let i = 1; i <= sceneCount; i++) {
+    const isFirst = i === 1;
+    const isLast = i === sceneCount;
+
+    let storyboard = '';
+    let imagePrompt = '';
+    let videoPrompt = '';
+    let narration = '';
+    let cta = '';
+
+    if (isFirst && !isLast) {
+      // Scene 1: Visual hook produk, unboxing/detail kemasan, rasa penasaran
+      storyboard = `Close-up estetik produk ${productName} di atas meja kayu minimalis dengan pencahayaan alami hangat. Tangan kreator memegang produk, memperlihatkan tekstur dan detail kemasan secara elegan di detik-detik awal.`;
+      imagePrompt = `Ultra-realistic 4K commercial still of ${productName} on modern minimalist studio backdrop, soft natural key light, crisp textures, depth of field, premium affiliate product photography.`;
+      videoPrompt = `Slow cinematic push-in shot of ${productName} (10 seconds), camera gently tracks inward, smooth motion blur, natural studio reflections, clean aesthetic grading, 24fps.`;
+      narration = `Sering bingung nyari ${productName} yang beneran berkualitas dan awet? Stop scroll dulu, ini dia alasan kenapa produk ini viral dan disukai banyak orang!`;
+      cta = `Tonton sampai habis untuk spill racikannya!`;
+    } else if (isLast) {
+      // Final Scene: Hasil nyata, kepuasan pemakaian, info promo & CTA keranjang kuning
+      storyboard = `Demonstrasi penggunaan ${productName} dalam aktivitas nyata. Kreator tersenyum puas menunjukkan hasil pemakaian, diikuti tampilan grafis promo diskon dan tanda panah mengarah ke keranjang kuning.`;
+      imagePrompt = `Authentic creator holding ${productName} with satisfied expression, clean lifestyle background, warm sunlight, commercial affiliate banner layout, high resolution.`;
+      videoPrompt = `Eye-level stable tracking shot (10 seconds), creator demonstrating ${productName}, vibrant organic colors, high definition, persuasive affiliate flow pacing, 24fps.`;
+      narration = `Dipakai harian nyaman banget, kualitasnya terbukti memuaskan. Khusus pembelian hari ini lagi ada promo potongan harga plus gratis ongkir!`;
+      cta = `Klik keranjang kuning di pojok kiri bawah sekarang sebelum promonya habis!`;
+    } else {
+      // Intermediate Scene: Feature highlight & manfaat spesifik
+      storyboard = `Medium close-up menonjolkan fitur unggulan utama ${productName}. Menunjukkan perbandingan atau kepraktisan saat dipakai di kehidupan sehari-hari.`;
+      imagePrompt = `Detailed feature breakdown shot of ${productName}, sharp macro focus, soft ambient lighting, clean modern aesthetic.`;
+      videoPrompt = `Gentle pan across ${productName} highlighting practical features (10 seconds), smooth glide, 24fps cinematic affiliate video look.`;
+      narration = `Bahan dan kualitasnya beneran beda dari yang biasa. Praktis dibawa ke mana-mana dan bikin aktivitasmu jadi jauh lebih gampang.`;
+      cta = `Cek varian favoritmu sekarang!`;
+    }
+
+    scenes.push({
+      sceneNumber: i,
+      duration: '10 detik',
+      storyboard,
+      imagePrompt,
+      videoPrompt,
+      narration,
+      cta,
+    });
+  }
+
+  const flowReadyData = {
+    productName,
+    totalDuration: normalizedDuration,
+    sceneCount,
+    scenes,
+    targetAudience: ctx.targetAudiens || 'Audiens Affiliate & Pembeli Online',
+    platform: ctx.platform || 'TikTok & Reels',
+    createdAt: 'Baru saja',
+  };
+
+  let draftText = `🎬 SIAP UNTUK FLOW\nProduk: ${productName}\n${sceneCount} Scene · ${normalizedDuration}\n\n`;
+  scenes.forEach((s) => {
+    draftText += `------------------------------------\nSCENE ${s.sceneNumber} — ${s.duration}\n------------------------------------\n[Storyboard]: ${s.storyboard}\n\n[Prompt Gambar]: ${s.imagePrompt}\n\n[Prompt Video]: ${s.videoPrompt}\n\n[Narasi]: "${s.narration}"\n\n[CTA]: ${s.cta}\n\n`;
+  });
+
+  return {
+    reply: `Siap! Saya sudah menyiapkan materi video affiliate untuk **${productName}** dengan durasi **${normalizedDuration}** (${sceneCount} scene × 10 detik).\n\nSemua materi storyboard, prompt video, dan narasinya sudah siap untuk dieksekusi di Flow!`,
+    suggestedActions: [
+      '🚀 Lanjut ke Flow',
+      '📋 Salin Semua Prompt',
+      '💾 Simpan ke Project',
+      '🎬 Buka di Studio'
+    ],
+    updatedContext: {
+      ...ctx,
+      produk: productName,
+      durasi: normalizedDuration,
+      pipelineStage: 'shotlist',
+      flowReady: flowReadyData,
+    },
+    structuredDraft: {
+      type: 'flow_ready',
+      title: `Siap untuk Flow: ${productName} (${normalizedDuration})`,
+      content: draftText.trim(),
+      flowReady: flowReadyData,
+      meta: { flowReady: flowReadyData }
+    },
+    flowReady: flowReadyData,
+  };
+}
+
+// Handler 1 PRODUK -> BANYAK KONTEN (Requirement 4)
+function generateMultiAngleAffiliatePackage(
+  message: string,
+  ctx: CreatorContext
+): CreatorEngineResponse {
+  const text = message.toLowerCase().trim();
+
+  let count = 5;
+  const countMatch = text.match(/(\d+)\s*(konten|video|angle|versi|buah)/i);
+  if (countMatch) {
+    const parsed = parseInt(countMatch[1], 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      count = Math.min(10, Math.max(1, parsed));
+    }
+  } else if (text.includes('3 konten') || text.includes('3')) {
+    count = 3;
+  } else if (text.includes('10 konten') || text.includes('10')) {
+    count = 10;
+  }
+
+  let productName = ctx.produk || '';
+  if (!productName || productName.toLowerCase() === 'produk ini' || productName.toLowerCase() === 'produk') {
+    const cleaned = message
+      .replace(/buat\s+\d+\s*(konten|video|affiliate)/gi, '')
+      .replace(/buat\s+video\s+affiliate/gi, '')
+      .replace(/konten\s+affiliate/gi, '')
+      .replace(/video\s+affiliate/gi, '')
+      .replace(/1\s+produk\s+banyak\s+konten/gi, '')
+      .replace(/produk\s+ini/gi, '')
+      .replace(/untuk/gi, '')
+      .replace(/dari/gi, '')
+      .replace(/masing-masing\s+\d+\s*detik/gi, '')
+      .trim();
+
+    productName = cleaned.length > 2 ? cleaned : 'Produk Pilihan Affiliate';
+  }
+
+  const ANGLES = [
+    {
+      name: 'Masalah → Solusi',
+      desc: 'Bahas keresahan audiens terlebih dahulu lalu hadirkan produk sebagai penyelamat.',
+      hook: (p: string) => `Pernah nggak sih ngerasa jengkel banget pas lagi butuh ${p} tapi yang ada malah ngecewain?`,
+      script: (p: string) => `Dulu aku sering banget ngalamin hal kayak gitu, sampai akhirnya nemu ${p} ini. Solusinya beneran simpel dan langsung berasa bedanya sejak hari pertama!`,
+      cta: 'Buat kamu yang punya masalah sama, cek keranjang kuning sekarang mumpung stok masih ready!'
+    },
+    {
+      name: 'Keunggulan Produk (USP)',
+      desc: 'Sorot fitur unik dan material terbaik yang membedakan produk dari kompetitor.',
+      hook: (p: string) => `Ini dia 3 alasan kenapa ${p} ini selalu sold out dalam hitungan jam!`,
+      script: (p: string) => `Pertama, bahannya premium dan awet. Kedua, desainnya ergonomis dan nyaman banget. Dan ketiga, harganya masuk akal banget untuk kualitas sebagus ini!`,
+      cta: 'Jangan tunggu kehabisan, checkout di keranjang kuning sekarang!'
+    },
+    {
+      name: 'Demo Penggunaan Langsung',
+      desc: 'Tunjukkan kepraktisan dan cara pakai produk secara visual dalam kehidupan nyata.',
+      hook: (p: string) => `Banyak yang nanya: "Beneran gampang nggak sih pakainya?" Yuk kita buktiin bareng!`,
+      script: (p: string) => `Tinggal buka, aplikasikan dalam hitungan detik, dan hasilnya langsung kelihatan rapi. Praktis banget buat kamu yang serba sibuk!`,
+      cta: 'Cobain sendiri kepraktisannya, klik tautan di keranjang kuning!'
+    },
+    {
+      name: 'Storytelling Personal',
+      desc: 'Cerita santai dan personal tentang bagaimana produk ini mengubah rutinitas harian.',
+      hook: (p: string) => `Jujur, awalnya aku skeptis sama ${p} ini karena seliweran terus di FYP...`,
+      script: (p: string) => `Tapi pas barangnya nyampe dan aku coba sendiri seminggu berturut-turut, ternyata worth it parah. Sekarang udah jadi barang wajib yang harus selalu ada!`,
+      cta: 'Yuk samaan sama aku, langsung tap keranjang kuning ya!'
+    },
+    {
+      name: 'Soft Selling + Promo Urgency',
+      desc: 'Pendekatan kasual ramah yang ditutup dengan penawaran terbatas dan diskon khusus.',
+      hook: (p: string) => `Spill barang viral yang harganya nggak masuk akal murahnya hari ini!`,
+      script: (p: string) => `Kualitasnya bintang lima tapi harganya lagi dapet subsidi diskon gede plus gratis ongkir khusus pemesanan hari ini.`,
+      cta: 'Promo cuma berlaku hari ini, buruan amankan di keranjang kuning sebelum harga normal lagi!'
+    },
+    {
+      name: 'Review Jujur & Pengalaman',
+      desc: 'Ulasan transparan sudut pandang konsumen asli yang membangun rasa percaya.',
+      hook: (p: string) => `Review jujur pemakaian ${p} setelah 30 hari pemakaian rutin.`,
+      script: (p: string) => `Yang paling aku suka itu build quality-nya beneran solid, nggak ringkih sama sekali. Bener-bener sebanding sama ulasan ribuan pembeli lainnya.`,
+      cta: 'Buktikan sendiri, cek review lengkap dan checkout via keranjang kuning!'
+    },
+    {
+      name: 'Before → After',
+      desc: 'Perbandingan visual kontras sebelum memakai produk vs sesudah merasakan manfaatnya.',
+      hook: (p: string) => `Lihat perbedaannya sebelum dan sesudah pakai ${p} ini!`,
+      script: (p: string) => `Dulu ribet dan makan waktu banget, sekarang semuanya beres cuma dalam beberapa menit. Efeknya beneran nyata dan instan.`,
+      cta: 'Mau hasil yang sama? Klik keranjang kuning di bawah sekarang juga!'
+    },
+    {
+      name: 'Edukasi & Tips Praktis',
+      desc: 'Bagi wawasan bermanfaat seputar kategori produk agar audiens mendapat nilai tambah.',
+      hook: (p: string) => `Jangan salah pilih! Ini tips penting sebelum kamu beli ${p}.`,
+      script: (p: string) => `Pastikan pilih yang materialnya teruji dan punya garansi kualitas seperti ini. Jangan tergiur yang murah tapi gampang rusak ya!`,
+      cta: 'Pilihan yang paling aman dan teruji ada di keranjang kuning!'
+    },
+    {
+      name: 'Hook Kuat & Rasa Penasaran',
+      desc: 'Membuka dengan fakta mengejutkan atau pertanyaan provokatif yang menahan audiens menonton.',
+      hook: (p: string) => `Kenapa nggak ada yang ngasih tahu aku produk ini dari tahun lalu?!`,
+      script: (p: string) => `Ternyata ini rahasia kecil yang bikin aktivitas jadi jauh lebih hemat tenaga dan hasil maksimal. Bener-bener game changer buat hari-hariku!`,
+      cta: 'Jangan sampai ketinggalan, langsung amankan di keranjang kuning!'
+    },
+    {
+      name: 'Promo & Diskon Eksklusif',
+      desc: 'Menonjolkan keuntungan finansial dan bonus ekstra jika bertransaksi sekarang.',
+      hook: (p: string) => `Peringatan promo kilat! Diskon terbesar bulan ini buat ${p}!`,
+      script: (p: string) => `Lagi ada promo voucher toko plus potongan ongkir. Jarang-jarang dapet produk sebagus ini di harga semurah ini!`,
+      cta: 'Mumpung kupon masih aktif, buruan klaim dan checkout di keranjang kuning!'
+    }
+  ];
+
+  const contents = [];
+  for (let i = 0; i < count; i++) {
+    const angle = ANGLES[i % ANGLES.length];
+    contents.push({
+      id: `content-${i + 1}`,
+      angleIndex: i + 1,
+      angleName: angle.name,
+      angleDescription: angle.desc,
+      hook: angle.hook(productName),
+      scenario: `Adegan visual hook yang relevan dengan sudut pandang "${angle.name}" untuk ${productName}. Menampilkan ekspresi natural kreator dengan transisi mulus ke keunggulan produk.`,
+      narration: angle.script(productName),
+      callToAction: angle.cta,
+      duration: '20 detik',
+      imagePrompt: `Cinematic commercial photography of ${productName}, angle style "${angle.name}", professional studio lighting, warm aesthetic, highly detailed 4k.`,
+      videoPrompt: `20-second dynamic affiliate video for ${productName}, pacing tailored for "${angle.name}", smooth gimbal push-in, clear product visibility, vibrant colors, 24fps.`
+    });
+  }
+
+  const multiAffiliateData = {
+    productName,
+    contentCount: count,
+    contents,
+    createdAt: 'Baru saja'
+  };
+
+  let formattedDraft = `🛍️ PAKET AFFILIATE: 1 PRODUK → ${count} KONTEN BERBEDA\nProduk: ${productName}\n\n`;
+  contents.forEach((c) => {
+    formattedDraft += `========================================\nKONTEN #${c.angleIndex}: Sudut Pandang [${c.angleName}]\n${c.angleDescription}\n----------------------------------------\n[Hook 3s]: "${c.hook}"\n[Naskah]: "${c.narration}"\n[CTA]: "${c.callToAction}"\n[Prompt Video]: ${c.videoPrompt}\n\n`;
+  });
+
+  return {
+    reply: `Saya telah meracik **${count} konten affiliate berbeda** untuk **${productName}**!\n\nSetiap konten memiliki angle dan hook yang berbeda (Masalah-Solusi, USP, Demo, Storytelling, dll) sehingga penonton tidak merasa bosan. Kamu bisa langsung menyalin atau memproses konten favoritmu ke video Flow!`,
+    suggestedActions: [
+      '🎬 Buat Video Flow untuk Konten 1',
+      '📋 Salin Semua Konten',
+      '💾 Simpan ke Project',
+      '🔄 Buat variasi lain'
+    ],
+    updatedContext: {
+      ...ctx,
+      produk: productName,
+      multiAffiliate: multiAffiliateData,
+    },
+    structuredDraft: {
+      type: 'multi_affiliate',
+      title: `1 Produk → ${count} Konten Affiliate: ${productName}`,
+      content: formattedDraft.trim(),
+      multiAffiliate: multiAffiliateData,
+      meta: { multiAffiliate: multiAffiliateData }
+    },
+    multiAffiliate: multiAffiliateData,
+  };
+}
+
+// Handler Buat Prompt (Requirement 9)
+function generatePromptPackage(
+  message: string,
+  ctx: CreatorContext
+): CreatorEngineResponse {
+  const text = message.toLowerCase().trim();
+  const isVideo = text.includes('video');
+  const isCinematic = text.includes('cinematic');
+  const isProduct = text.includes('produk') || text.includes('product') || text.includes('photography');
+  const isAffiliate = text.includes('affiliate') || text.includes('iklan');
+
+  let category: any = 'cinematic';
+  if (isProduct) category = 'product_photography';
+  else if (isAffiliate) category = 'affiliate';
+  else if (isVideo) category = 'video';
+  else if (isCinematic) category = 'cinematic';
+
+  let subject = ctx.produk || ctx.karakter || '';
+  if (!subject || subject.toLowerCase() === 'produk ini') {
+    const cleaned = message
+      .replace(/buat\s+prompt/gi, '')
+      .replace(/buatkan\s+prompt/gi, '')
+      .replace(/prompt/gi, '')
+      .replace(/cinematic/gi, '')
+      .replace(/video/gi, '')
+      .replace(/gambar/gi, '')
+      .replace(/affiliate/gi, '')
+      .replace(/produk/gi, '')
+      .trim();
+    subject = cleaned.length > 2 ? cleaned : 'Produk Unggulan Modern';
+  }
+
+  const promptGlobal = `Professional commercial 4K cinematic visual of ${subject}, ultra-detailed textures, pristine studio depth of field, warm golden-hour rim lighting, shot on 35mm master prime lens, clean composition, hyper-realistic, 8k resolution, award-winning cinematography.`;
+  const promptIndo = `Panduan Visual: Tampilan sinematik 4K subjek ${subject}, pencahayaan golden-hour hangat, ketajaman tekstur maksimal, kedalaman fokus studio profesional, komposisi bersih dan elegan untuk konten visual berkualitas tinggi.`;
+
+  const promptPackData = {
+    category,
+    title: `Prompt Siap Salin: ${subject}`,
+    promptGlobal,
+    promptIndo,
+    negativePrompt: 'blurry, distorted, low quality, cartoon, watermark, noisy, deformed',
+    aspectRatio: '16:9 atau 9:16',
+    usageTips: 'Salin Prompt Global untuk generator AI (Midjourney, Flux, Kling, Runway, Flow) dan gunakan prompt Indo untuk arahan tim.'
+  };
+
+  const draftText = `📝 PROMPT SIAP DISALIN\nSubjek: ${subject}\n\n[PROMPT GLOBAL (AI)]: \n${promptGlobal}\n\n[PANDUAN INDONESIA]:\n${promptIndo}\n\n[NEGATIVE PROMPT]:\n${promptPackData.negativePrompt}`;
+
+  return {
+    reply: `Ini dia prompt teroptimasi untuk **${subject}**! Prompt ini sudah dirancang khusus agar menghasilkan visual sinematik berkualitas tinggi di generator AI pilihanmu.`,
+    suggestedActions: [
+      '📋 Salin Prompt',
+      '🖼️ Buat Gambarnya Sekarang',
+      '🎬 Buat Video dari Prompt Ini',
+      '💾 Simpan ke Project'
+    ],
+    updatedContext: {
+      ...ctx,
+      promptPack: promptPackData
+    },
+    structuredDraft: {
+      type: 'prompt_pack',
+      title: `Prompt: ${subject}`,
+      content: draftText,
+      promptPack: promptPackData,
+      meta: { promptPack: promptPackData }
+    },
+    promptPack: promptPackData
+  };
+}
+
+// Handler Buat Gambar (Requirement 8)
+function generateImageResponse(
+  message: string,
+  ctx: CreatorContext
+): CreatorEngineResponse {
+  let subject = ctx.produk || ctx.karakter || '';
+  const cleaned = message
+    .replace(/buat\s+gambar/gi, '')
+    .replace(/buatkan\s+gambar/gi, '')
+    .replace(/gambar/gi, '')
+    .replace(/terlihat\s+premium/gi, '')
+    .trim();
+
+  if (cleaned.length > 2) {
+    subject = cleaned;
+  } else if (!subject) {
+    subject = 'Produk estetik dengan pencahayaan studio hangat';
+  }
+
+  const prompt = `Ultra-detailed commercial 4K shot of ${subject}, premium minimalist studio environment, soft diffused lighting, crisp textures, natural wooden table, bokeh background, award-winning photography, photorealistic, 8k.`;
+
+  const imageResultData = {
+    prompt,
+    aspectRatio: '1:1',
+    status: 'prompt_only' as const
+  };
+
+  const draftText = `🖼️ PROMPT GAMBAR SIAP DIGUNAKAN\nDeskripsi: ${subject}\n\n[Prompt AI]:\n${prompt}`;
+
+  return {
+    reply: `Siap! Saya sudah menyiapkan arahan visual dan prompt gambar berkualitas studio untuk **${subject}**. Kamu bisa langsung menyalin prompt atau membuat gambarnya!`,
+    suggestedActions: [
+      '📋 Salin Prompt Gambar',
+      '🎬 Jadikan Video Affiliate',
+      '💾 Simpan ke Project',
+      '🔄 Buat Variasi Gaya Lain'
+    ],
+    updatedContext: {
+      ...ctx,
+      imageResult: imageResultData
+    },
+    structuredDraft: {
+      type: 'image_result',
+      title: `Visual: ${subject}`,
+      content: draftText,
+      imageResult: imageResultData,
+      meta: { imageResult: imageResultData }
+    },
+    imageResult: imageResultData
+  };
+}
+
 // Fallback logic when apiKey is absent, quota is reached, or offline
 export function processLocalCreatorEngine(
   message: string,
@@ -36,6 +454,117 @@ export function processLocalCreatorEngine(
 ): CreatorEngineResponse {
   const text = message.toLowerCase().trim();
   const ctx: CreatorContext = { ...currentContext };
+
+  // ========================================================
+  // SPECIAL HANDLER: STRUCTURED MOTION_CONTEXT (Requirement 5)
+  // ========================================================
+  if (text.includes('motion_context:') || text.includes('motion_context')) {
+    const lines = message.split('\n');
+    const motionData: Record<string, string> = {};
+    for (const l of lines) {
+      const trimmed = l.trim();
+      if (trimmed.includes('=')) {
+        const [k, ...rest] = trimmed.split('=');
+        motionData[k.trim().toLowerCase()] = rest.join('=').trim();
+      }
+    }
+
+    const preset = motionData.preset || 'Slow Push-in (Dolly In)';
+    const angle = motionData.angle || 'Eye Level';
+    const speed = motionData.speed || 'Normal';
+    const intensity = motionData.intensity || 'Normal';
+    const subject = motionData.subject || ctx.karakter || ctx.produk || 'subjek utama';
+    const scene = motionData.scene || 'adegan video';
+
+    const reply = `Siap! Gerakan kamera **"${preset}"** (${angle}, tempo ${speed}) berhasil diterapkan untuk subjek **${subject}** pada ${scene}!\n\nKamera akan bergerak terarah untuk menghasilkan fokus visual yang kuat dan sinematik. Pengaturan ini sudah otomatis disimpan ke metadata project dan dimasukkan ke dalam Prompt Video AI.`;
+
+    const updatedContext: CreatorContext = {
+      ...ctx,
+      motion: {
+        preset,
+        cameraMovement: preset,
+        angle,
+        speed,
+        intensity,
+        subject,
+        scene,
+      },
+    };
+
+    return {
+      reply,
+      suggestedActions: [
+        '🎬 Buka Studio Video',
+        '🎥 Lihat Shot List',
+        '✨ Buat Semua Visual',
+        '🔄 Ubah Gerakan'
+      ],
+      updatedContext,
+      structuredDraft: {
+        type: 'shotlist',
+        title: `Motion Kamera: ${preset}`,
+        content: `Instruksi Gerakan Kamera:
+- Jenis Gerakan: ${preset}
+- Sudut Kamera: ${angle}
+- Kecepatan Gerakan: ${speed}
+- Intensitas: ${intensity}
+- Subjek / Fokus: ${subject}
+- Scene Terkait: ${scene}`,
+        meta: { preset, angle, speed, intensity, subject, scene }
+      }
+    };
+  }
+
+  // ========================================================
+  // SPECIAL HANDLER: 1 PRODUK -> BANYAK KONTEN (Requirement 4)
+  // ========================================================
+  if (
+    (text.includes('konten') && (text.includes('3') || text.includes('5') || text.includes('10') || text.includes('banyak') || text.includes('beberapa'))) ||
+    text.includes('1 produk') ||
+    text.includes('banyak konten')
+  ) {
+    return generateMultiAngleAffiliatePackage(message, ctx);
+  }
+
+  // ========================================================
+  // SPECIAL HANDLER: BUAT PROMPT (Requirement 9)
+  // ========================================================
+  if (
+    text.startsWith('buat prompt') ||
+    text.startsWith('prompt') ||
+    text.includes('buat prompt') ||
+    text.includes('prompt video') ||
+    text.includes('prompt gambar') ||
+    text.includes('prompt cinematic')
+  ) {
+    return generatePromptPackage(message, ctx);
+  }
+
+  // ========================================================
+  // SPECIAL HANDLER: BUAT GAMBAR (Requirement 8)
+  // ========================================================
+  if (
+    text.startsWith('buat gambar') ||
+    text.startsWith('gambar') ||
+    text.includes('buat gambar') ||
+    text.includes('gambar produk') ||
+    text.includes('terlihat premium')
+  ) {
+    return generateImageResponse(message, ctx);
+  }
+
+  // ========================================================
+  // SPECIAL HANDLER: AFFILIATE VIDEO & FLOW READY (Requirement 3 & 4)
+  // ========================================================
+  if (
+    text.includes('affiliate') ||
+    text.includes('flow ready') ||
+    text.includes('siap untuk flow') ||
+    text.includes('video affiliate') ||
+    (text.includes('buat video') && (text.includes('detik') || text.includes('second') || text.includes('20') || text.includes('30')))
+  ) {
+    return generateAffiliateFlowPackage(message, ctx);
+  }
 
   // ========================================================
   // PIPELINE STAGE 4: SHOT LIST GENERATOR ("🎥 Buat Shot List")
@@ -857,8 +1386,22 @@ export async function processHejoConversation(params: {
 }): Promise<CreatorEngineResponse> {
   const { message, history, userMode, currentContext, ai, apiKey } = params;
 
-  // Immediate local engine if no API key or if quota cooldown is active
-  if (!apiKey || isQuotaCooldownActive()) {
+  // Immediate local engine if no API key, quota cooldown active, or structured motion_context / affiliate / flow / prompt / gambar
+  const lowerMsg = message.toLowerCase();
+  if (
+    !apiKey || 
+    isQuotaCooldownActive() || 
+    lowerMsg.includes('motion_context') || 
+    lowerMsg.includes('affiliate') || 
+    lowerMsg.includes('siap untuk flow') ||
+    lowerMsg.includes('flow ready') ||
+    lowerMsg.includes('banyak konten') ||
+    lowerMsg.includes('1 produk') ||
+    lowerMsg.startsWith('buat prompt') ||
+    lowerMsg.startsWith('prompt') ||
+    lowerMsg.startsWith('buat gambar') ||
+    lowerMsg.startsWith('gambar')
+  ) {
     return processLocalCreatorEngine(message, currentContext, userMode);
   }
 

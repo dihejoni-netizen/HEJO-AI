@@ -31,6 +31,9 @@ import {
   Image as ImageIcon,
   UserCircle2,
   ChevronDown,
+  ChevronUp,
+  Settings,
+  Sliders,
   Package
 } from 'lucide-react';
 import { 
@@ -56,6 +59,11 @@ import { saveVisualImageToDb, getAllVisualImagesFromDb } from '../services/image
 import { ProjectProgressBar } from './ProjectProgressBar';
 import { NewProjectModal } from './NewProjectModal';
 import { VideoPackView } from './VideoPackView';
+import { SimpleWorkflowProgress } from './SimpleWorkflowProgress';
+import { NarrationCard } from './NarrationCard';
+import { SimplifiedSceneCard } from './SimplifiedSceneCard';
+import { getSmartMotionForScene, STANDARD_NEGATIVE_PROMPT } from '../utils/motionHelper';
+import { generateNarrationPackage, NarrationPackage } from '../utils/narrationHelper';
 
 const INITIAL_IDEAS: PipelineIdea[] = [
   {
@@ -471,6 +479,12 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [videoPlaybackSpeed, setVideoPlaybackSpeed] = useState<number>(1);
   const [videoProductionSubTab, setVideoProductionSubTab] = useState<'timeline' | 'videopack'>('timeline');
+
+  // Simple Mode & UX Simplification States (Requirements 2, 4, 6, 8)
+  const [expandedDetails, setExpandedDetails] = useState<Record<number, boolean>>({});
+  const [visualProgressText, setVisualProgressText] = useState<string | null>(null);
+  const [proSettingsOpen, setProSettingsOpen] = useState(false);
+  const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
   
   // Context Inputs
   const [topicInput, setTopicInput] = useState(
@@ -566,6 +580,26 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
   });
   const [isGeneratingAllImages, setIsGeneratingAllImages] = useState(false);
 
+  // Narration Package State (Requirement 9)
+  const [narrationPkg, setNarrationPkg] = useState<NarrationPackage | null>(() => {
+    if (activeProject?.narration) {
+      return {
+        fullScript: activeProject.narration.script || '',
+        voiceDirection: activeProject.narration.voiceDirection || 'Suara ramah dan jelas',
+        tone: activeProject.narration.tone || 'Hangat dan meyakinkan',
+        pace: activeProject.narration.pace || 'Tempo normal',
+        characterName: activeProject.characterName,
+        scenesNarration: [],
+      };
+    }
+    return generateNarrationPackage(
+      INITIAL_SCRIPT,
+      INITIAL_SCENES,
+      { targetAudiens: targetAudience, platform },
+      activeCharacter
+    );
+  });
+
   // Sync from creatorContext or activeProject if present
   useEffect(() => {
     const projWithShots = projects?.find((p) => Boolean(p && p.pipelineShots && p.pipelineShots.length > 0));
@@ -615,6 +649,26 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     }
     if (creatorContext?.pipelineStage) {
       setPipelineStage(creatorContext.pipelineStage as any);
+    }
+
+    if (activeProject?.narration) {
+      setNarrationPkg({
+        fullScript: activeProject.narration.script || '',
+        voiceDirection: activeProject.narration.voiceDirection || 'Suara ramah dan jelas',
+        tone: activeProject.narration.tone || 'Hangat dan meyakinkan',
+        pace: activeProject.narration.pace || 'Tempo normal',
+        characterName: activeProject.characterName,
+        scenesNarration: [],
+      });
+    } else if (activeProject?.pipelineScript && activeProject?.pipelineScenes) {
+      setNarrationPkg(
+        generateNarrationPackage(
+          activeProject.pipelineScript,
+          activeProject.pipelineScenes,
+          { targetAudiens: targetAudience, platform },
+          activeCharacter
+        )
+      );
     }
   }, [activeProject, creatorContext, projects]);
 
@@ -866,6 +920,154 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     });
   };
 
+  // Auto Full Pipeline Orchestrator (Requirement 2 & 3)
+  const runAutoFullPipeline = async (customPrompt?: string) => {
+    setIsAutoPipelineRunning(true);
+    const promptText = customPrompt || topicInput || activeProject?.title || 'Video Promosi Kopi Susu Aren 30 Detik';
+    
+    try {
+      // 1. Generate Ideas
+      const newIdeas = await fetchPipelineIdeas({
+        produk: promptText,
+        targetAudiens: targetAudience,
+        platform,
+        tujuan: goal,
+        karakter: activeCharacter?.name,
+        karakterDnaId: activeCharacter?.id,
+      });
+      setIdeas(newIdeas);
+      const chosenIdea = newIdeas[0] || INITIAL_IDEAS[0];
+      setSelectedIdea(chosenIdea);
+
+      // 2. Generate Script
+      const newScript = await fetchPipelineScript(
+        {
+          produk: promptText,
+          targetAudiens: targetAudience,
+          platform,
+          tujuan: goal,
+          karakter: activeCharacter?.name,
+          karakterDnaId: activeCharacter?.id,
+        },
+        chosenIdea
+      );
+      setScript(newScript);
+
+      // 3. Generate Storyboard
+      const newScenes = await fetchPipelineStoryboard(
+        {
+          produk: promptText,
+          targetAudiens: targetAudience,
+          platform,
+          tujuan: goal,
+          karakter: activeCharacter?.name,
+          karakterDnaId: activeCharacter?.id,
+        },
+        newScript
+      );
+      setScenes(newScenes);
+
+      // 4. Generate Shot List with Smart Motion and Prompts
+      const rawShots = await fetchPipelineShotList(
+        {
+          produk: promptText,
+          targetAudiens: targetAudience,
+          platform,
+          tujuan: goal,
+          karakter: activeCharacter?.name,
+          karakterDnaId: activeCharacter?.id,
+        },
+        newScenes
+      );
+
+      const enrichedShots: PipelineShot[] = rawShots.map((s, idx) => {
+        const sceneObj = newScenes[idx] || scenes[idx];
+        const motion = getSmartMotionForScene(sceneObj, s, idx);
+        const isNone = s.characterId === 'none';
+        const shotChar = isNone
+          ? null
+          : (s.characterId ? characters.find((c) => c.id === s.characterId) : null) || activeCharacter;
+
+        const charName = shotChar?.name;
+        const charNotes = shotChar?.visualNotes || shotChar?.notes;
+        const imagePrompt = charName
+          ? `Cinematic ${s.shotType || 'Medium Shot'}. Character: ${charName} (${charNotes || 'consistent appearance'}). Subject: ${s.subject}. Camera: ${motion.cameraAngle}, ${motion.cameraMovement}. Lighting: ${s.lighting}. Location: ${s.location}. Props: ${s.props}. 4k, clean focus.`
+          : `Cinematic ${s.shotType || 'Medium Shot'}. Subject: ${s.subject}. Camera: ${motion.cameraAngle}, ${motion.cameraMovement}. Lighting: ${s.lighting}. Location: ${s.location}. Props: ${s.props}. 4k, clean focus.`;
+
+        const videoPrompt = `[AI Video: ${s.shotNumber}] [Camera: ${s.shotType || 'Medium Shot'}, ${motion.cameraAngle}, ${motion.cameraMovement}] [Tempo: ${motion.speed}] Subject: ${s.subject}.${charName ? ` Character: ${charName}.` : ''} Lighting: ${s.lighting}. Location: ${s.location}. 24fps motion blur, realistic physics.`;
+
+        return {
+          ...s,
+          cameraAngle: motion.cameraAngle,
+          cameraMovement: motion.cameraMovement,
+          motionSuggestion: motion.description,
+          imagePrompt,
+          videoPrompt,
+          voiceOver: sceneObj?.voiceOver || '',
+          negativePrompt: STANDARD_NEGATIVE_PROMPT,
+          status: 'ready',
+          characterId: shotChar?.id,
+          characterName: shotChar?.name,
+          character: shotChar ? {
+            id: shotChar.id,
+            name: shotChar.name,
+            visualNotes: charNotes,
+            imageUrl: shotChar.imageUrl || shotChar.imageReference,
+          } : undefined,
+        };
+      });
+
+      setShotList(enrichedShots);
+      handleStageChange('shotlist');
+      persistShotUpdate(enrichedShots);
+
+      const narrationPkg = generateNarrationPackage(newScript, newScenes, { targetAudiens: targetAudience, platform }, activeCharacter);
+      setNarrationPkg(narrationPkg);
+      saveProject({
+        id: activeProject?.id,
+        title: chosenIdea.title || promptText,
+        description: `Target: ${targetAudience} · Platform: ${platform} · 4 Scene Storyboard + Shot List`,
+        category: 'video',
+        status: 'ready',
+        pipelineIdeas: newIdeas,
+        pipelineScript: newScript,
+        pipelineScenes: newScenes,
+        pipelineShots: enrichedShots,
+        narration: {
+          script: narrationPkg.fullScript,
+          voiceDirection: narrationPkg.voiceDirection,
+          tone: narrationPkg.tone,
+          pace: narrationPkg.pace,
+        },
+      }, true);
+
+      if (setCreatorContext) {
+        setCreatorContext((prev) => ({
+          ...prev,
+          autoRunPipeline: false,
+          pipelineStage: 'shotlist',
+          pipelineIdeas: newIdeas,
+          pipelineScript: newScript,
+          pipelineStoryboard: newScenes,
+          pipelineShotList: enrichedShots,
+        }));
+      }
+
+      showToast('✨ Konsep, naskah, storyboard, dan prompt selesai disiapkan! Silakan klik "✨ Buat Semua Visual".');
+    } catch (err) {
+      console.error('Auto pipeline error:', err);
+      showToast('Sebagian proses otomatis selesai disiapkan.');
+    } finally {
+      setIsAutoPipelineRunning(false);
+    }
+  };
+
+  useEffect(() => {
+    if (creatorContext?.autoRunPipeline) {
+      runAutoFullPipeline(creatorContext.rawPrompt || creatorContext.produk);
+    }
+  }, [creatorContext?.autoRunPipeline]);
+
   const handleGenerateShotList = async () => {
     setIsLoading(true);
     try {
@@ -890,23 +1092,46 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         scenes
       );
 
-      // Pre-enrich new shots with active character if project has one
-      const enrichedShots = newShots.map((s) =>
-        activeCharacter
-          ? {
-              ...s,
-              characterId: activeCharacter.id,
-              characterName: activeCharacter.name,
-              character: {
-                id: activeCharacter.id,
-                name: activeCharacter.name,
-                description: activeCharacter.description,
-                visualNotes: activeCharacter.visualNotes || activeCharacter.notes,
-                imageUrl: activeCharacter.imageUrl || activeCharacter.imageReference,
-              },
-            }
-          : s
-      );
+      // Pre-enrich new shots with active character and smart motion
+      const enrichedShots: PipelineShot[] = newShots.map((s, idx) => {
+        const sceneObj = scenes[idx];
+        const motion = getSmartMotionForScene(sceneObj, s, idx);
+        const isNone = s.characterId === 'none';
+        const shotChar = isNone
+          ? null
+          : (s.characterId ? characters.find((c) => c.id === s.characterId) : null) || activeCharacter;
+
+        const charName = shotChar?.name;
+        const charNotes = shotChar?.visualNotes || shotChar?.notes;
+        const imagePrompt = charName
+          ? `Cinematic ${s.shotType || 'Medium Shot'}. Character: ${charName} (${charNotes || 'consistent appearance'}). Subject: ${s.subject}. Camera: ${motion.cameraAngle}, ${motion.cameraMovement}. Lighting: ${s.lighting}. Location: ${s.location}. Props: ${s.props}.`
+          : `Cinematic ${s.shotType || 'Medium Shot'}. Subject: ${s.subject}. Camera: ${motion.cameraAngle}, ${motion.cameraMovement}. Lighting: ${s.lighting}. Location: ${s.location}. Props: ${s.props}.`;
+
+        const videoPrompt = `[AI Video: ${s.shotNumber}] [Camera: ${s.shotType || 'Medium Shot'}, ${motion.cameraAngle}, ${motion.cameraMovement}] [Tempo: ${motion.speed}] Subject: ${s.subject}.${charName ? ` Character: ${charName}.` : ''} Lighting: ${s.lighting}. Location: ${s.location}. 24fps motion blur.`;
+
+        return {
+          ...s,
+          cameraAngle: motion.cameraAngle,
+          cameraMovement: motion.cameraMovement,
+          motionSuggestion: motion.description,
+          imagePrompt,
+          videoPrompt,
+          voiceOver: sceneObj?.voiceOver || '',
+          negativePrompt: STANDARD_NEGATIVE_PROMPT,
+          status: 'ready',
+          characterId: shotChar?.id,
+          characterName: shotChar?.name,
+          character: shotChar
+            ? {
+                id: shotChar.id,
+                name: shotChar.name,
+                description: shotChar.description,
+                visualNotes: charNotes,
+                imageUrl: shotChar.imageUrl || shotChar.imageReference,
+              }
+            : undefined,
+        };
+      });
 
       setShotList(enrichedShots);
       handleStageChange('shotlist');
@@ -1004,6 +1229,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
               ...s,
               imageUrl: url,
               image: url,
+              status: 'completed',
               characterId: shotChar?.id,
               characterName: shotChar?.name,
               character: shotChar
@@ -1018,7 +1244,6 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
             }
           : s
       );
-      console.log(`[HEJO Persistence Debug] Single shot object updated with imageUrl:`, updatedShots[idx]);
       persistShotUpdate(updatedShots);
 
       showToast(`Visual ${shot.shotNumber} berhasil dibuat!`);
@@ -1028,152 +1253,142 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         ...prev,
         [idx]: {
           loading: false,
-          error: err?.message || 'Gagal membuat visual shot ini',
+          error: 'Perlu dicoba lagi',
           url: prev[idx]?.url,
         },
       }));
-      showToast(`Gagal membuat visual ${shot.shotNumber}`);
+      showToast(`Gagal membuat visual ${shot.shotNumber}. Silakan coba lagi.`);
     }
   };
 
+  // Sequential Visual Generator with Step Progress (Requirement 6)
   const handleGenerateAllShotImages = async () => {
     if (isGeneratingAllImages || shotList.length === 0) return;
 
     setIsGeneratingAllImages(true);
-    showToast(`Membuat visual untuk ${shotList.length} shot...`);
-
-    // Set all shots to loading state
-    const initialLoadingMap: Record<number, { url?: string; loading: boolean; error?: string }> = {};
-    shotList.forEach((shot, idx) => {
-      initialLoadingMap[idx] = {
-        loading: true,
-        error: undefined,
-        url: shotImages[idx]?.url || shot.imageUrl || (shot as any).image,
-      };
-    });
-    setShotImages((prev) => ({ ...prev, ...initialLoadingMap }));
+    showToast(`Memulai pembuatan visual ${shotList.length} shot secara berurutan...`);
 
     const updatedShots = [...shotList];
+    let successCount = 0;
 
-    // Generate each shot concurrently with isolated error handling per shot
-    await Promise.allSettled(
-      shotList.map(async (shot, idx) => {
-        try {
-          const isNone = shot.characterId === 'none';
-          const shotChar = isNone
-            ? null
-            : (shot.characterId ? characters.find((c) => c.id === shot.characterId) : null) ||
-              activeCharacter ||
-              (shot.character
-                ? ({
-                    id: shot.character.id || 'custom',
-                    name: shot.character.name,
-                    description: shot.character.description,
-                    visualNotes: shot.character.visualNotes,
-                    imageUrl: shot.character.imageUrl,
-                  } as CharacterDNA)
-                : null);
+    for (let idx = 0; idx < shotList.length; idx++) {
+      const shot = shotList[idx];
+      setVisualProgressText(`Visual ${idx + 1}/${shotList.length}`);
+      setShotImages((prev) => ({
+        ...prev,
+        [idx]: { loading: true, error: undefined, url: prev[idx]?.url },
+      }));
 
-          const charImageUrl = shotChar?.imageUrl || shotChar?.imageReference;
-          const charVisualNotes = shotChar?.visualNotes || shotChar?.notes || shotChar?.visualDescription;
+      try {
+        const isNone = shot.characterId === 'none';
+        const shotChar = isNone
+          ? null
+          : (shot.characterId ? characters.find((c) => c.id === shot.characterId) : null) ||
+            activeCharacter ||
+            (shot.character
+              ? ({
+                  id: shot.character.id || 'custom',
+                  name: shot.character.name,
+                  description: shot.character.description,
+                  visualNotes: shot.character.visualNotes,
+                  imageUrl: shot.character.imageUrl,
+                } as CharacterDNA)
+              : null);
 
-          const enrichedShot: PipelineShot = {
-            ...shot,
-            characterId: shotChar?.id,
-            characterName: shotChar?.name,
-            character: shotChar
-              ? {
-                  id: shotChar.id,
-                  name: shotChar.name,
-                  description: shotChar.description,
-                  visualNotes: charVisualNotes,
-                  imageUrl: charImageUrl,
-                }
-              : undefined,
-            visualPrompt: shotChar
-              ? `Cinematic ${shot.shotType}. Character: ${shotChar.name}. Visual Features: ${charVisualNotes || ''}. Subject: ${shot.subject}. Camera: ${shot.cameraAngle}, ${shot.cameraMovement}. Lighting: ${shot.lighting}. Location: ${shot.location}. Props: ${shot.props}.`
-              : `Cinematic ${shot.shotType}. Subject: ${shot.subject}. Camera: ${shot.cameraAngle}, ${shot.cameraMovement}. Lighting: ${shot.lighting}. Location: ${shot.location}. Props: ${shot.props}.`,
-          };
+        const charImageUrl = shotChar?.imageUrl || shotChar?.imageReference;
+        const charVisualNotes = shotChar?.visualNotes || shotChar?.notes || shotChar?.visualDescription;
 
-          const enrichedContext: CreatorContext = {
-            produk: topicInput,
-            targetAudiens: targetAudience,
-            platform,
-            tujuan: goal,
-            karakter: shotChar?.name,
-            karakterDnaId: shotChar?.id,
-            character: shotChar
-              ? {
-                  id: shotChar.id,
-                  name: shotChar.name,
-                  description: shotChar.description,
-                  visualNotes: charVisualNotes,
-                  imageUrl: charImageUrl,
-                }
-              : undefined,
-            characterLock: shotChar
-              ? {
-                  id: shotChar.id,
-                  name: shotChar.name,
-                  description: shotChar.description,
-                  notes: charVisualNotes,
-                  imageUrl: charImageUrl,
-                }
-              : undefined,
-          };
+        const enrichedShot: PipelineShot = {
+          ...shot,
+          characterId: shotChar?.id,
+          characterName: shotChar?.name,
+          character: shotChar
+            ? {
+                id: shotChar.id,
+                name: shotChar.name,
+                description: shotChar.description,
+                visualNotes: charVisualNotes,
+                imageUrl: charImageUrl,
+              }
+            : undefined,
+          visualPrompt: shotChar
+            ? `Cinematic ${shot.shotType}. Character: ${shotChar.name}. Visual Features: ${charVisualNotes || ''}. Subject: ${shot.subject}. Camera: ${shot.cameraAngle}, ${shot.cameraMovement}. Lighting: ${shot.lighting}. Location: ${shot.location}. Props: ${shot.props}.`
+            : `Cinematic ${shot.shotType}. Subject: ${shot.subject}. Camera: ${shot.cameraAngle}, ${shot.cameraMovement}. Lighting: ${shot.lighting}. Location: ${shot.location}. Props: ${shot.props}.`,
+        };
 
-          const url = await fetchPipelineShotImage(enrichedShot, enrichedContext);
+        const enrichedContext: CreatorContext = {
+          produk: topicInput,
+          targetAudiens: targetAudience,
+          platform,
+          tujuan: goal,
+          karakter: shotChar?.name,
+          karakterDnaId: shotChar?.id,
+          character: shotChar ? {
+            id: shotChar.id,
+            name: shotChar.name,
+            description: shotChar.description,
+            visualNotes: charVisualNotes,
+            imageUrl: charImageUrl,
+          } : undefined,
+          characterLock: shotChar ? {
+            id: shotChar.id,
+            name: shotChar.name,
+            description: shotChar.description,
+            notes: charVisualNotes,
+            imageUrl: charImageUrl,
+          } : undefined,
+        };
 
-          console.log(`[HEJO Persistence Debug] Image URL received for shot ${shot.shotNumber} (${idx}):`, url);
+        const url = await fetchPipelineShotImage(enrichedShot, enrichedContext);
 
-          setShotImages((prev) => ({
-            ...prev,
-            [idx]: { loading: false, url, error: undefined },
-          }));
+        setShotImages((prev) => ({
+          ...prev,
+          [idx]: { loading: false, url, error: undefined },
+        }));
 
-          updatedShots[idx] = {
-            ...updatedShots[idx],
-            imageUrl: url,
-            image: url,
-            characterId: shotChar?.id,
-            characterName: shotChar?.name,
-            character: shotChar
-              ? {
-                  id: shotChar.id,
-                  name: shotChar.name,
-                  description: shotChar.description,
-                  visualNotes: charVisualNotes,
-                  imageUrl: charImageUrl,
-                }
-              : undefined,
-          };
-          console.log(`[HEJO Persistence Debug] Image URL stored into updatedShots[${idx}]:`, updatedShots[idx].imageUrl);
+        updatedShots[idx] = {
+          ...updatedShots[idx],
+          imageUrl: url,
+          image: url,
+          status: 'completed',
+          characterId: shotChar?.id,
+          characterName: shotChar?.name,
+        };
+        successCount++;
 
-          // Persist each shot immediately to DB/cache
-          saveVisualImageToDb(`shot_${shot.shotNumber}_${shot.subject}`, url);
-          saveVisualImageToDb(`shot_${shot.shotNumber}`, url);
-          saveVisualImageToDb(`shot_idx_${idx}`, url);
-          saveVisualImageToDb(`ctx_shot_${idx}`, url);
-          if (activeProject?.id) {
-            saveVisualImageToDb(`proj_${activeProject.id}_shot_${idx}`, url);
-          }
-        } catch (err: any) {
-          console.error(`[HEJO Persistence Debug] Error generating shot ${shot.shotNumber}:`, err);
-          setShotImages((prev) => ({
-            ...prev,
-            [idx]: {
-              loading: false,
-              error: err?.message || 'Gagal membuat visual shot ini',
-              url: prev[idx]?.url,
-            },
-          }));
+        saveVisualImageToDb(`shot_${shot.shotNumber}_${shot.subject}`, url);
+        saveVisualImageToDb(`shot_${shot.shotNumber}`, url);
+        saveVisualImageToDb(`shot_idx_${idx}`, url);
+        saveVisualImageToDb(`ctx_shot_${idx}`, url);
+        if (activeProject?.id) {
+          saveVisualImageToDb(`proj_${activeProject.id}_shot_${idx}`, url);
         }
-      })
-    );
+      } catch (err: any) {
+        console.error(`[HEJO Persistence Debug] Error generating shot ${shot.shotNumber}:`, err);
+        setShotImages((prev) => ({
+          ...prev,
+          [idx]: {
+            loading: false,
+            error: 'Perlu dicoba lagi',
+            url: prev[idx]?.url,
+          },
+        }));
+        updatedShots[idx] = {
+          ...updatedShots[idx],
+          status: 'needs_retry',
+        };
+      }
+    }
 
     persistShotUpdate(updatedShots);
     setIsGeneratingAllImages(false);
-    showToast('Pemrosesan visual tiap shot selesai!');
+    setVisualProgressText(null);
+
+    if (successCount === shotList.length) {
+      showToast('Visual selesai 🎉 Siap lanjut ke Video!');
+    } else {
+      showToast(`Selesai: ${successCount}/${shotList.length} visual berhasil dibuat.`);
+    }
   };
 
   const handleCopyContent = (text: string, stage: string) => {
@@ -1259,6 +1474,31 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         onNavigateTab={(tab) => {
           if (setNavTab) setNavTab(tab);
         }}
+      />
+
+      {/* 9 Alur Otomatis Progress Tracker (Requirement 2 & 13) */}
+      <SimpleWorkflowProgress
+        isAutoPipelineRunning={isAutoPipelineRunning}
+        hasIdeas={ideas.length > 0}
+        hasScript={Boolean(script?.hook)}
+        hasStoryboard={scenes.length > 0}
+        hasShotList={shotList.length > 0}
+        imagesCompletedCount={Object.values(shotImages).filter((img) => Boolean(img?.url)).length}
+        totalShotsCount={shotList.length}
+        isGeneratingAllImages={isGeneratingAllImages}
+        visualProgressText={visualProgressText}
+        pipelineStage={pipelineStage}
+        onGenerateAllVisuals={handleGenerateAllShotImages}
+        onProceedToVideo={() => {
+          handleStageChange('videoproduction');
+          setVideoCurrentTime(0);
+          setVideoCurrentShotIndex(0);
+        }}
+        onOpenVideoPack={() => {
+          handleStageChange('videoproduction');
+          setVideoProductionSubTab('videopack');
+        }}
+        userMode={userMode}
       />
 
       {/* Header Studio */}
@@ -1836,49 +2076,64 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
           ======================================================== */}
       {pipelineStage === 'shotlist' && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 rounded-2xl p-4 shadow-xs">
+          {/* Narration Ready Card (Requirement 9: "🎙️ Narasi siap" & "Salin Narasi") */}
+          <NarrationCard
+            narration={narrationPkg}
+            showToast={showToast}
+            userMode={userMode}
+          />
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs">
             <div>
               <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">
-                TAHAP 4: SHOT LIST PRODUKSI
+                TAHAP 4: SHOT LIST & VISUAL
               </span>
               <h2 className="text-base sm:text-lg font-extrabold text-stone-900">
-                Panduan Pengambilan Gambar ({shotList.length} Shot)
+                Panduan Visual & Shot ({shotList.length} Shot)
               </h2>
+              <p className="text-xs text-stone-500 mt-0.5">
+                HEJO otomatis memilih gerakan kamera dan menyiapkan prompt visual per adegan.
+              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => {
-                  handleStageChange('videoproduction');
-                  setVideoCurrentTime(0);
-                  setVideoCurrentShotIndex(0);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer hover:scale-[1.02]"
-                title="Rangkai 4 visual shot menjadi video timeline 30 detik"
-              >
-                <Film className="w-3.5 h-3.5" />
-                <span>🎬 Buat Video dari 4 Shot</span>
-              </button>
+              {/* Requirement 6, 7 & 13: Single Prominent Action */}
+              {Object.values(shotImages).filter((img) => Boolean(img?.url)).length >= shotList.length ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleStageChange('videoproduction');
+                    setVideoCurrentTime(0);
+                    setVideoCurrentShotIndex(0);
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-xs transition-all cursor-pointer hover:scale-[1.02]"
+                >
+                  <span>Visual selesai 🎉 ▶ Lanjut ke Video</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleGenerateAllShotImages}
+                  disabled={isGeneratingAllImages}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-xs transition-all cursor-pointer hover:scale-[1.02] disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  {isGeneratingAllImages ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-emerald-200" />
+                      <span>Memproses {visualProgressText || 'Visual...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 text-emerald-200" />
+                      <span>✨ Buat Semua Visual</span>
+                    </>
+                  )}
+                </button>
+              )}
 
               <button
-                onClick={handleGenerateAllShotImages}
-                disabled={isGeneratingAllImages}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer hover:scale-[1.02] disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {isGeneratingAllImages ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Membuat Gambar Visual...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Generate Gambar Visual tiap Shot</span>
-                  </>
-                )}
-              </button>
-
-              <button
+                type="button"
                 onClick={() =>
                   handleCopyContent(
                     shotList
@@ -1890,7 +2145,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
                     'shotlist'
                   )
                 }
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
               >
                 {copiedStage === 'shotlist' ? (
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -1901,8 +2156,9 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={handleSaveCurrentPipelineToProject}
-                className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer hover:scale-[1.02]"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer hover:scale-[1.02]"
               >
                 <BookmarkCheck className="w-3.5 h-3.5" />
                 <span>💾 Simpan ke Project</span>
@@ -1910,367 +2166,133 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* CHARACTER PICKER DI TAHAP SHOT LIST (Visual Character Reference) */}
-          <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-center gap-3">
-              {activeCharacter?.imageUrl || activeCharacter?.imageReference ? (
-                <div className="w-11 h-11 rounded-xl overflow-hidden border border-emerald-300 shadow-2xs shrink-0">
-                  <img
-                    src={activeCharacter.imageUrl || activeCharacter.imageReference}
-                    alt={activeCharacter.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-2xs shrink-0">
-                  {activeCharacter ? activeCharacter.name.charAt(0).toUpperCase() : <UserCircle2 className="w-6 h-6" />}
-                </div>
-              )}
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
-                    Karakter Visual:
-                  </span>
-                  {activeCharacter ? (
-                    <span className="text-xs font-extrabold text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-md">
-                      {activeCharacter.name}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-stone-500 italic">
-                      Belum dipilih
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-stone-600 mt-0.5 truncate max-w-md">
-                  {activeCharacter
-                    ? (activeCharacter.visualNotes || activeCharacter.description || 'Referensi visual aktif untuk shot list.')
-                    : 'Pilih karakter agar HEJO mengetahui karakter yang digunakan dalam visual shot ini.'}
-                </p>
+          {/* Sequential Generation Progress Notice (Requirement 6) */}
+          {isGeneratingAllImages && visualProgressText && (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 flex items-center justify-between text-xs text-emerald-950 animate-pulse">
+              <div className="flex items-center gap-2 font-bold">
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                <span>Memproses {visualProgressText} secara berurutan...</span>
               </div>
+              <span className="text-emerald-700 font-medium">Mohon jangan menutup halaman ini</span>
             </div>
+          )}
 
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-bold text-stone-600 hidden sm:inline">Karakter:</span>
-              <div className="relative">
-                <select
-                  value={activeCharacter?.id || ''}
-                  onChange={(e) => handleSelectCharacter(e.target.value)}
-                  className="text-xs font-bold px-3 py-2 bg-white border border-stone-300 rounded-xl focus:outline-none focus:border-emerald-600 shadow-2xs cursor-pointer text-stone-800"
+          {/* CHARACTER PICKER DI TAHAP SHOT LIST (CREATOR & PRO MODE) */}
+          {userMode !== 'SIMPLE' && (
+            <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                {activeCharacter?.imageUrl || activeCharacter?.imageReference ? (
+                  <div className="w-11 h-11 rounded-xl overflow-hidden border border-emerald-300 shadow-2xs shrink-0">
+                    <img
+                      src={activeCharacter.imageUrl || activeCharacter.imageReference}
+                      alt={activeCharacter.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-2xs shrink-0">
+                    {activeCharacter ? activeCharacter.name.charAt(0).toUpperCase() : <UserCircle2 className="w-6 h-6" />}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                      Karakter Visual:
+                    </span>
+                    {activeCharacter ? (
+                      <span className="text-xs font-extrabold text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-md">
+                        {activeCharacter.name}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-stone-500 italic">
+                        Belum dipilih
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-stone-600 mt-0.5 truncate max-w-md">
+                    {activeCharacter
+                      ? (activeCharacter.visualNotes || activeCharacter.description || 'Referensi visual aktif untuk shot list.')
+                      : 'Pilih karakter agar HEJO mengetahui karakter yang digunakan dalam visual shot ini.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-bold text-stone-600 hidden sm:inline">Karakter:</span>
+                <div className="relative">
+                  <select
+                    value={activeCharacter?.id || ''}
+                    onChange={(e) => handleSelectCharacter(e.target.value)}
+                    className="text-xs font-bold px-3 py-2 bg-white border border-stone-300 rounded-xl focus:outline-none focus:border-emerald-600 shadow-2xs cursor-pointer text-stone-800"
+                  >
+                    <option value="">-- Pilih Karakter --</option>
+                    {characters.filter((c) => Boolean(c && c.id)).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        👤 {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (setNavTab) setNavTab('characters');
+                  }}
+                  className="text-xs font-bold px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1"
+                  title="Buka Menu Karakter"
                 >
-                  <option value="">-- Pilih Karakter --</option>
-                  {characters.filter((c) => Boolean(c && c.id)).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      👤 {c.name}
-                    </option>
-                  ))}
-                </select>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Karakter</span>
+                </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (setNavTab) setNavTab('characters');
-                }}
-                className="text-xs font-bold px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1"
-                title="Buka Menu Karakter"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Karakter</span>
-              </button>
             </div>
-          </div>
+          )}
 
-          {/* Shot List Table / Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Shot List Table / Cards using SimplifiedSceneCard (Requirement 4) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {shotList.map((shot, idx) => {
               const imgState = shotImages[idx];
               const rawUrl = shot.imageUrl || (shot as any).image || imgState?.url;
               const currentUrl = rawUrl && rawUrl !== '[IDB_IMAGE]' ? rawUrl : undefined;
-              if (currentUrl) {
-                console.log(`[HEJO Persistence Debug] Rendering shot ${shot.shotNumber} (${idx}) with image URL:`, currentUrl);
-              }
               const isLoadingThis = imgState?.loading;
               const errorThis = imgState?.error;
 
+              const isNone = shot.characterId === 'none';
+              const shotEffectiveChar = isNone
+                ? null
+                : (shot.characterId ? characters.find((c) => Boolean(c && c.id === shot.characterId)) : null) ||
+                  activeCharacter ||
+                  (shot.character
+                    ? ({
+                        id: shot.character.id || 'custom',
+                        name: shot.character.name,
+                        description: shot.character.description,
+                        visualNotes: shot.character.visualNotes,
+                        imageUrl: shot.character.imageUrl,
+                      } as CharacterDNA)
+                    : null);
+
               return (
-                <div
+                <SimplifiedSceneCard
                   key={idx}
-                  className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-3"
-                >
-                  {/* Shot Card Header with Character Badge */}
-                  {(() => {
-                    const isNone = shot.characterId === 'none';
-                    const shotEffectiveChar = isNone
-                      ? null
-                      : (shot.characterId ? characters.find((c) => Boolean(c && c.id === shot.characterId)) : null) ||
-                        activeCharacter ||
-                        (shot.character
-                          ? ({
-                              id: shot.character.id || 'custom',
-                              name: shot.character.name,
-                              description: shot.character.description,
-                              visualNotes: shot.character.visualNotes,
-                              imageUrl: shot.character.imageUrl,
-                            } as CharacterDNA)
-                          : null);
-
-                    const charThumbUrl = shotEffectiveChar?.imageUrl || shotEffectiveChar?.imageReference;
-                    const charDisplayName = shotEffectiveChar?.name || 'Karakter';
-
-                    return (
-                      <>
-                        <div className="flex items-center justify-between border-b border-stone-100 pb-2.5 gap-2 flex-wrap">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-extrabold text-stone-900 tracking-wider">
-                              {shot.shotNumber} · {shot.scene}
-                            </span>
-
-                            {/* Badge Karakter pada Header Shot Card (Requirement 6 & 7) */}
-                            {shotEffectiveChar && (
-                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200/90 text-emerald-900 shadow-2xs">
-                                {charThumbUrl ? (
-                                  <img
-                                    src={charThumbUrl}
-                                    alt={charDisplayName}
-                                    className="w-4 h-4 rounded-full object-cover border border-emerald-300 shrink-0"
-                                  />
-                                ) : (
-                                  <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[9px] font-bold flex items-center justify-center shrink-0">
-                                    {charDisplayName.charAt(0).toUpperCase()}
-                                  </span>
-                                )}
-                                <span className="text-[11px] font-extrabold truncate max-w-[120px]">
-                                  {charDisplayName}
-                                </span>
-                                {shot.characterId && shot.characterId !== activeCharacter?.id && (
-                                  <span className="text-[9px] bg-emerald-200/80 text-emerald-950 font-semibold px-1 rounded shrink-0">
-                                    Khusus Shot
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md shrink-0">
-                            ⏱️ {shot.duration}
-                          </span>
-                        </div>
-
-                        {/* Karakter Reference Visual Box untuk Shot Ini (Requirement 5, 6 & 7) */}
-                        <div className="bg-stone-50/90 rounded-xl p-3 border border-stone-200/80 space-y-2">
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              {shotEffectiveChar ? (
-                                <>
-                                  {charThumbUrl ? (
-                                    <div className="w-8 h-8 rounded-lg overflow-hidden border border-emerald-300 shadow-2xs shrink-0">
-                                      <img
-                                        src={charThumbUrl}
-                                        alt={charDisplayName}
-                                        className="w-full h-full object-cover"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                                      {charDisplayName.charAt(0).toUpperCase()}
-                                    </div>
-                                  )}
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider shrink-0">
-                                        Karakter:
-                                      </span>
-                                      <span className="font-extrabold text-stone-900 text-xs truncate">
-                                        {charDisplayName}
-                                      </span>
-                                    </div>
-                                    <p className="text-[10px] text-stone-500 truncate max-w-[180px]">
-                                      {shotEffectiveChar.visualNotes || shotEffectiveChar.notes || shotEffectiveChar.description || 'Referensi visual aktif'}
-                                    </p>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="flex items-center gap-1.5 text-stone-400 italic text-xs">
-                                  <UserCircle2 className="w-4 h-4 text-stone-300 shrink-0" />
-                                  <span>Tanpa referensi karakter khusus</span>
-                                </div>
-                              )}
-                            </div>
-
-                            <select
-                              value={shot.characterId || ''}
-                              onChange={(e) => handleAssignCharacterToShot(idx, e.target.value)}
-                              className="text-[11px] font-semibold px-2.5 py-1.5 bg-white border border-stone-200 rounded-lg text-stone-700 focus:outline-none focus:border-emerald-600 cursor-pointer max-w-[145px] truncate shadow-2xs"
-                              title="Pilih karakter untuk shot ini"
-                            >
-                              <option value="">
-                                {activeCharacter ? `👤 Ikuti Proyek (${activeCharacter.name})` : '-- Pilih Karakter --'}
-                              </option>
-                              <option value="none">🚫 Tanpa Karakter</option>
-                              {characters.filter((c) => Boolean(c && c.id)).map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  👤 {c.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Catatan Visual Spesifik Karakter */}
-                          {shotEffectiveChar && (shotEffectiveChar.visualNotes || shotEffectiveChar.notes) && (
-                            <div className="pt-2 border-t border-stone-200/60 flex items-start gap-1.5 text-[11px] text-stone-600">
-                              <span className="font-bold text-stone-400 text-[10px] shrink-0 uppercase">DETAIL:</span>
-                              <span className="line-clamp-2 leading-relaxed italic text-stone-700">
-                                {shotEffectiveChar.visualNotes || shotEffectiveChar.notes}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Visual Image Display Section */}
-                        {isLoadingThis ? (
-                          <div className="relative rounded-xl overflow-hidden bg-emerald-50/70 border border-emerald-200 aspect-video flex flex-col items-center justify-center p-4 text-center">
-                            <RefreshCw className="w-6 h-6 text-emerald-600 animate-spin mb-2" />
-                            <span className="text-xs font-bold text-emerald-900">
-                              Menghasilkan visual {shot.shotNumber}...
-                            </span>
-                            <span className="text-[10px] text-emerald-700 mt-0.5 line-clamp-1 max-w-[240px]">
-                              {shot.shotType} · {shot.subject}
-                            </span>
-                            {shotEffectiveChar && (
-                              <span className="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-100/80 px-2 py-0.5 rounded">
-                                Karakter: {shotEffectiveChar.name}
-                              </span>
-                            )}
-                          </div>
-                        ) : errorThis ? (
-                          <div className="relative rounded-xl overflow-hidden bg-rose-50 border border-rose-200 aspect-video flex flex-col items-center justify-center p-3 text-center">
-                            <AlertCircle className="w-5 h-5 text-rose-500 mb-1" />
-                            <span className="text-xs font-bold text-rose-900">
-                              Gagal membuat gambar {shot.shotNumber}
-                            </span>
-                            <p className="text-[10px] text-rose-600 mt-0.5 mb-2 line-clamp-1 max-w-[220px]">
-                              {errorThis}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateSingleShotImage(shot, idx)}
-                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
-                            >
-                              <RefreshCw className="w-3 h-3" />
-                              <span>Coba Lagi</span>
-                            </button>
-                          </div>
-                        ) : currentUrl ? (
-                          <div className="relative rounded-xl overflow-hidden bg-stone-900 border border-stone-200 aspect-video group">
-                            <img
-                              src={currentUrl}
-                              alt={`Visual ${shot.shotNumber}`}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover"
-                            />
-                            {/* Top Left Shot Badge */}
-                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-stone-900/80 backdrop-blur-xs text-[10px] font-extrabold text-white uppercase tracking-wider">
-                              {shot.shotNumber}
-                            </div>
-
-                            {/* Bottom Left Character Badge on Image (Requirement 6 & 7) */}
-                            {shotEffectiveChar && (
-                              <div className="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-stone-900/85 backdrop-blur-xs text-[10px] font-semibold text-white flex items-center gap-1.5 border border-white/10 shadow-xs z-10">
-                                {charThumbUrl ? (
-                                  <img
-                                    src={charThumbUrl}
-                                    alt={shotEffectiveChar.name}
-                                    className="w-3.5 h-3.5 rounded-full object-cover shrink-0"
-                                  />
-                                ) : (
-                                  <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[8px] font-bold flex items-center justify-center">
-                                    {shotEffectiveChar.name.charAt(0).toUpperCase()}
-                                  </span>
-                                )}
-                                <span className="truncate max-w-[140px]">{shotEffectiveChar.name}</span>
-                              </div>
-                            )}
-
-                            <div className="absolute inset-0 bg-stone-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-2 z-20">
-                              <button
-                                type="button"
-                                onClick={() => handleGenerateSingleShotImage(shot, idx)}
-                                className="px-2 py-1 bg-stone-900/90 hover:bg-black text-white rounded-lg text-[10px] font-semibold flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
-                                title="Generate ulang shot ini"
-                              >
-                                <RefreshCw className="w-3 h-3" />
-                                <span>Regenerate</span>
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="relative rounded-xl bg-stone-50 border border-dashed border-stone-200 aspect-video flex flex-col items-center justify-center p-3 text-center group hover:bg-stone-100/60 transition-colors">
-                            <ImageIcon className="w-6 h-6 text-stone-300 group-hover:text-emerald-600 transition-colors mb-1" />
-                            <span className="text-[11px] font-medium text-stone-500">
-                              Visual gambar belum dibuat
-                            </span>
-                            {shotEffectiveChar && (
-                              <div className="mt-1 flex items-center gap-1 text-[10px] text-stone-600 bg-white/90 px-2 py-0.5 rounded-md border border-stone-200 shadow-2xs">
-                                {charThumbUrl ? (
-                                  <img
-                                    src={charThumbUrl}
-                                    alt={shotEffectiveChar.name}
-                                    className="w-3.5 h-3.5 rounded-full object-cover shrink-0"
-                                  />
-                                ) : (
-                                  <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 text-white text-[8px] font-bold flex items-center justify-center">
-                                    {shotEffectiveChar.name.charAt(0).toUpperCase()}
-                                  </span>
-                                )}
-                                <span>Karakter: <strong className="text-stone-800">{shotEffectiveChar.name}</strong></span>
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateSingleShotImage(shot, idx)}
-                              className="mt-1.5 text-[10px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer"
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              <span>Generate Shot Ini</span>
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                    <div>
-                      <span className="text-stone-400 block text-[10px] font-bold uppercase">JENIS SHOT</span>
-                      <span className="font-semibold text-stone-800">{shot.shotType}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-stone-400 block text-[10px] font-bold uppercase">SUBJEK</span>
-                      <span className="font-semibold text-stone-800">{shot.subject}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-stone-400 block text-[10px] font-bold uppercase">SUDUT & GERAK</span>
-                      <span className="font-semibold text-stone-800">{shot.cameraAngle} · {shot.cameraMovement}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-stone-400 block text-[10px] font-bold uppercase">LIGHTING</span>
-                      <span className="font-semibold text-stone-800">{shot.lighting}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-stone-400 block text-[10px] font-bold uppercase">LOKASI</span>
-                      <span className="font-semibold text-stone-800">{shot.location}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-stone-400 block text-[10px] font-bold uppercase">PROPS</span>
-                      <span className="font-semibold text-stone-800">{shot.props}</span>
-                    </div>
-                  </div>
-                </div>
+                  shot={shot}
+                  index={idx}
+                  voiceOverText={scenes[idx]?.voiceOver}
+                  imageUrl={currentUrl}
+                  isLoadingImage={isLoadingThis}
+                  imageError={errorThis}
+                  character={shotEffectiveChar}
+                  characters={characters}
+                  userMode={userMode}
+                  onGenerateSingleImage={handleGenerateSingleShotImage}
+                  onAssignCharacter={handleAssignCharacterToShot}
+                  onUpdateShot={(i, updated) => {
+                    const next = shotList.map((s, si) => (si === i ? { ...s, ...updated } : s));
+                    persistShotUpdate(next);
+                  }}
+                  showToast={showToast}
+                />
               );
             })}
           </div>
@@ -2660,7 +2682,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
                     </button>
                   </div>
 
-                  {/* Shot Navigation Chips & Speed Selector */}
+                  {/* Shot Navigation Chips & Pengaturan Pro Toggle (Requirement 8) */}
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center bg-stone-800/80 p-1 rounded-xl border border-stone-700">
                       {shotList.map((shot, idx) => {
@@ -2681,23 +2703,50 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
                       })}
                     </div>
 
-                    <div className="flex items-center gap-1 bg-stone-800/80 p-1 rounded-xl border border-stone-700 text-xs">
-                      {[0.75, 1, 1.25].map((speed) => (
-                        <button
-                          key={speed}
-                          onClick={() => setVideoPlaybackSpeed(speed)}
-                          className={`px-2 py-0.5 rounded-lg font-bold transition-colors cursor-pointer ${
-                            videoPlaybackSpeed === speed
-                              ? 'bg-stone-700 text-white'
-                              : 'text-stone-400 hover:text-stone-200'
-                          }`}
-                        >
-                          {speed}x
-                        </button>
-                      ))}
-                    </div>
+                    {/* Pengaturan Pro Button (Requirement 8) */}
+                    <button
+                      type="button"
+                      onClick={() => setProSettingsOpen((prev) => !prev)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white rounded-xl border border-stone-700 text-xs font-bold cursor-pointer transition-colors"
+                      title="Pengaturan teknis lanjutan"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                      <span>⚙️ Pengaturan Pro {proSettingsOpen ? '▴' : '▾'}</span>
+                    </button>
                   </div>
                 </div>
+
+                {/* Collapsible Pengaturan Pro Details */}
+                {proSettingsOpen && (
+                  <div className="pt-3 border-t border-stone-800 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-300 animate-in fade-in duration-150">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-stone-400 text-[11px] uppercase">Kecepatan Preview:</span>
+                      <div className="flex items-center gap-1 bg-stone-800 p-1 rounded-lg border border-stone-700">
+                        {[0.75, 1, 1.25].map((speed) => (
+                          <button
+                            key={speed}
+                            onClick={() => setVideoPlaybackSpeed(speed)}
+                            className={`px-2 py-0.5 rounded font-bold transition-colors cursor-pointer ${
+                              videoPlaybackSpeed === speed
+                                ? 'bg-amber-600 text-white'
+                                : 'text-stone-400 hover:text-stone-200'
+                            }`}
+                          >
+                            {speed}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-stone-400 text-[11px]">
+                      <span>Aspect: <strong>16:9 Widescreen</strong></span>
+                      <span>·</span>
+                      <span>Coherence: <strong>24fps Motion</strong></span>
+                      <span>·</span>
+                      <span>Format: <strong>AI Video Pack Ready</strong></span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
