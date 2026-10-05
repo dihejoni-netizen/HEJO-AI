@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0f172a" />
+        <stop offset="40%" stop-color="#1e293b" />
+        <stop offset="100%" stop-color="#064e3b" />
+      </linearGradient>
+      <linearGradient id="cardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.08)" />
+        <stop offset="100%" stop-color="rgba(0,0,0,0.4)" />
+      </linearGradient>
+    </defs>
+    
+    <rect width="1280" height="720" fill="url(#bgGrad)" />
+
+    <rect x="40" y="40" width="1200" height="640" rx="16" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2" stroke-dasharray="8 8" />
+    <line x1="40" y1="90" x2="1240" y2="90" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+
+    <rect x="60" y="55" width="140" height="26" rx="6" fill="#047857" />
+    <text x="130" y="73" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" letter-spacing="1">SHOT 1</text>
+    
+    <text x="215" y="73" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold">Scene · 3 detik</text>
+
+    <text x="1220" y="73" fill="#6ee7b7" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600" text-anchor="end">HEJO AI · STORYBOARD VISUAL STILL</text>
+
+    <rect x="80" y="115" width="1120" height="525" rx="20" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" />
+
+    <circle cx="160" cy="180" r="38" fill="#065f46" stroke="#34d399" stroke-width="2" />
+    <text x="160" y="190" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="bold" text-anchor="middle">🎬</text>
+
+    <text x="220" y="175" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="26" font-weight="800">Medium Shot</text>
+    <text x="220" y="202" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500">Angle: Eye level | Gerak: Static</text>
+
+    <rect x="120" y="240" width="1040" height="110" rx="12" fill="rgba(0,0,0,0.3)" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+    <text x="145" y="270" fill="#a7f3d0" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" letter-spacing="1">SUBJEK UTAMA &amp; AKSI SHOT</text>
+    <text x="145" y="304" fill="#f1f5f9" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700">testing</text>
+    <text x="145" y="332" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="13">Lighting: Pencahayaan Sinematik Alami · Lokasi: Studio / Lokasi · Props: -</text>
+
+    
+    <g transform="translate(120, 370)">
+      <rect width="1040" height="90" rx="12" fill="rgba(0,0,0,0.2)" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+      <text x="30" y="38" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" letter-spacing="1">MODE VISUAL UMUM</text>
+      <text x="30" y="65" fill="#cbd5e1" font-family="system-ui, -apple-system, sans-serif" font-size="14">Visual dihasilkan dengan fokus pada subjek, produk, dan lokasi tanpa karakter khusus.</text>
+    </g>
+    
+
+    <text x="140" y="595" fill="#64748b" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">FORMAT 16:9 WIDESCREEN · CINEMATIC STILL</text>
+    <text x="1140" y="595" fill="#10b981" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="bold" text-anchor="end">HEJO CREATOR ENGINE</text>
+  </svg>

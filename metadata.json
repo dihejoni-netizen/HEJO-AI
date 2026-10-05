@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix HEJO AI",
+  "description": "HEJO AI adalah Taman Kreator (Creator Workspace) untuk membantu pengguna dari ide sampai karya dengan prinsip canggih di belakang, sederhana di depan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
