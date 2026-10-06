@@ -26,6 +26,7 @@ interface AccountViewProps {
   onSetActiveFlowAccount: (id: string) => Promise<void>;
   onRemoveFlowAccount: (id: string) => Promise<void>;
   onLogout: () => Promise<void>;
+  onOpenFlowWorkspace?: () => void;
   connection?: GoogleFlowConnection;
   projectCount: number;
   setActiveTab: (tab: ActiveNavTab) => void;
@@ -40,6 +41,7 @@ export const AccountView: React.FC<AccountViewProps> = ({
   onSetActiveFlowAccount,
   onRemoveFlowAccount,
   onLogout,
+  onOpenFlowWorkspace,
   connection,
   projectCount,
   setActiveTab,
@@ -67,6 +69,10 @@ export const AccountView: React.FC<AccountViewProps> = ({
   };
 
   const handleOpenFlow = () => {
+    if (onOpenFlowWorkspace) {
+      onOpenFlowWorkspace();
+      return;
+    }
     try {
       window.open('https://labs.google/flow', '_blank', 'noopener,noreferrer');
       const accountEmail = activeFlowAccount?.email || connection?.googleEmail || 'Google Anda';

@@ -12,7 +12,10 @@ import {
   FileText,
   Sparkles,
   Camera,
-  Film
+  Film,
+  Volume2,
+  Download,
+  Mic
 } from 'lucide-react';
 import { ProjectItem, ActiveNavTab } from '../types';
 import { calculateProjectProgress } from '../utils/projectProgress';
@@ -26,6 +29,7 @@ interface ProjectLibraryViewProps {
   setActiveProjectId: (id: string | null) => void;
   setActiveTab: (tab: ActiveNavTab) => void;
   showToast: (msg: string) => void;
+  onOpenVoiceOver?: (text?: string, project?: ProjectItem) => void;
 }
 
 export const ProjectLibraryView: React.FC<ProjectLibraryViewProps> = ({
@@ -36,6 +40,7 @@ export const ProjectLibraryView: React.FC<ProjectLibraryViewProps> = ({
   setActiveProjectId,
   setActiveTab,
   showToast,
+  onOpenVoiceOver,
 }) => {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +60,31 @@ export const ProjectLibraryView: React.FC<ProjectLibraryViewProps> = ({
     setActiveProjectId(id);
     setActiveTab('studio');
     showToast('Project dimuat di Studio');
+  };
+
+  const handleDownloadProjectAudio = async (audioUrl: string, projectName: string) => {
+    try {
+      showToast('⬇️ Menyiapkan file audio Voice Over (.wav)...');
+      const response = await fetch(audioUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${projectName.toLowerCase().replace(/\s+/g, '_')}_voiceover.wav`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(a);
+      showToast('✅ Audio Voice Over (.wav) berhasil diunduh!');
+    } catch {
+      const a = document.createElement('a');
+      a.href = audioUrl;
+      a.download = `${projectName.toLowerCase().replace(/\s+/g, '_')}_voiceover.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('⬇️ Mengunduh file audio Voice Over (.wav)...');
+    }
   };
 
   const handleCreateNewProject = (name: string) => {
@@ -224,6 +254,71 @@ export const ProjectLibraryView: React.FC<ProjectLibraryViewProps> = ({
                       <span className="text-stone-400 text-[11px]">Jumlah Konten:</span>
                       <span className="font-semibold text-stone-800">{contentCount}</span>
                     </div>
+                    {project.voiceOver?.audioUrl ? (
+                      <div className="pt-2 border-t border-stone-200/60 space-y-1.5">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-emerald-800 font-extrabold text-[11px] flex items-center gap-1 truncate">
+                            <Volume2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Voice Over ✓ ({project.voiceOver.voiceCharacter} · ±{project.voiceOver.durationSeconds}s)</span>
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadProjectAudio(project.voiceOver!.audioUrl, project.name || project.title);
+                              }}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-200 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                              title="Unduh WAV Voice Over"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>WAV</span>
+                            </button>
+                            {onOpenVoiceOver && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenVoiceOver(project.voiceOver?.text, project);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                                title="Ganti atau buat ulang Voice Over"
+                              >
+                                Ganti
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <audio
+                          controls
+                          src={project.voiceOver.audioUrl}
+                          className="w-full h-7"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    ) : (
+                      <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-xs">
+                        <span className="text-stone-400 text-[11px] flex items-center gap-1">
+                          <Volume2 className="w-3 h-3 text-stone-300" />
+                          <span>Voice Over belum dibuat</span>
+                        </span>
+                        {onOpenVoiceOver && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenVoiceOver(project.script || project.name || '', project);
+                            }}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                            title="Buat Voice Over untuk project ini"
+                          >
+                            <Mic className="w-3 h-3 text-emerald-600" />
+                            <span>+ Buat Voice Over</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between pt-1 border-t border-stone-200/60">
                       <span className="text-stone-400 text-[11px]">Status:</span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${statusBadge.color}`}>

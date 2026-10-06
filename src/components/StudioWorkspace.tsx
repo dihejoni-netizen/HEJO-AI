@@ -34,7 +34,9 @@ import {
   ChevronUp,
   Settings,
   Sliders,
-  Package
+  Package,
+  Mic,
+  Volume2
 } from 'lucide-react';
 import { 
   StoryboardScene, 
@@ -219,6 +221,7 @@ interface StudioWorkspaceProps {
   characters?: CharacterDNA[];
   saveCharacter?: (char: Partial<CharacterDNA> & { name: string }) => void;
   assignCharacterToProject?: (projectId: string, char: CharacterDNA) => void;
+  onOpenVoiceOver?: (text?: string) => void;
 }
 
 export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
@@ -234,6 +237,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
   projects = [],
   characters = [],
   assignCharacterToProject,
+  onOpenVoiceOver,
 }) => {
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isCharacterPickerOpen, setIsCharacterPickerOpen] = useState(false);
@@ -1460,6 +1464,31 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
     showToast(`Project "${selectedIdea.title || topicInput}" berhasil disimpan!`);
   };
 
+  const handleDownloadProjectAudio = async (audioUrl: string, projectName: string) => {
+    try {
+      showToast('⬇️ Menyiapkan file audio Voice Over (.wav)...');
+      const response = await fetch(audioUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${projectName.toLowerCase().replace(/\s+/g, '_')}_voiceover.wav`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(a);
+      showToast('✅ Audio Voice Over (.wav) berhasil diunduh!');
+    } catch {
+      const a = document.createElement('a');
+      a.href = audioUrl;
+      a.download = `${projectName.toLowerCase().replace(/\s+/g, '_')}_voiceover.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('⬇️ Mengunduh file audio Voice Over (.wav)...');
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       {/* PROJECT WORKSPACE: Active Project & Sequential Progress Tracker */}
@@ -1470,7 +1499,8 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
           if (setActiveProjectId) setActiveProjectId(id);
         }}
         onOpenNewProjectModal={() => setIsNewProjectModalOpen(true)}
-        onNavigateStage={(stage) => handleStageChange(stage)}
+        onNavigateStage={(stage) => handleStageChange(stage as any)}
+        onOpenVoiceOver={onOpenVoiceOver}
         onNavigateTab={(tab) => {
           if (setNavTab) setNavTab(tab);
         }}
@@ -1483,6 +1513,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
         hasScript={Boolean(script?.hook)}
         hasStoryboard={scenes.length > 0}
         hasShotList={shotList.length > 0}
+        hasVoiceOver={Boolean(activeProject?.voiceOver?.audioUrl)}
         imagesCompletedCount={Object.values(shotImages).filter((img) => Boolean(img?.url)).length}
         totalShotsCount={shotList.length}
         isGeneratingAllImages={isGeneratingAllImages}
@@ -1498,6 +1529,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
           handleStageChange('videoproduction');
           setVideoProductionSubTab('videopack');
         }}
+        onOpenVoiceOver={onOpenVoiceOver ? () => onOpenVoiceOver(activeProject?.voiceOver?.text || activeProject?.script || '') : undefined}
         userMode={userMode}
       />
 
@@ -1532,12 +1564,38 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
 
       {/* Studio Project & Character Context Bar */}
       <div className="bg-stone-50 border border-stone-200/80 rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-stone-600">
+        <div className="flex items-center gap-2 text-stone-600 flex-wrap">
           <span className="font-semibold text-stone-400">Project:</span>
           <span className="font-bold text-stone-800">{activeProject?.title || activeProject?.name || 'Project Studio'}</span>
           <span className="text-stone-300">|</span>
           <span className="font-semibold text-stone-400">Tahap:</span>
           <span className="font-bold text-emerald-700 capitalize">{pipelineStage}</span>
+          <span className="text-stone-300">|</span>
+          <span className="font-semibold text-stone-400">Voice Over:</span>
+          {activeProject?.voiceOver?.audioUrl ? (
+            <button
+              type="button"
+              onClick={() => onOpenVoiceOver && onOpenVoiceOver(activeProject.voiceOver?.text)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-bold hover:bg-emerald-200 transition-colors cursor-pointer"
+              title="Voice Over sudah ada di project. Klik untuk dengarkan, unduh, atau ubah."
+            >
+              <span>Voice Over ✓</span>
+              <span className="text-[10px] text-emerald-700">({activeProject.voiceOver.voiceCharacter})</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                const combined = (scenes || []).map((s) => s.voiceOver).filter(Boolean).join(' ') || activeProject?.script || '';
+                if (onOpenVoiceOver) onOpenVoiceOver(combined);
+              }}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold transition-colors cursor-pointer"
+              title="Project belum memiliki Voice Over. Klik untuk buat dari naskah project."
+            >
+              <Mic className="w-3 h-3" />
+              <span>+ Buat Voice Over</span>
+            </button>
+          )}
         </div>
 
         {/* Character Picker (Section 2 & 6: [foto] Bening Mentari ▼ or [+ Tambahkan Karakter]) */}
@@ -1854,6 +1912,21 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
                 <span>💾 Simpan</span>
               </button>
 
+              {onOpenVoiceOver && (
+                <button
+                  onClick={() =>
+                    onOpenVoiceOver(
+                      `${script.hook} ${script.problem} ${script.solution} ${script.advantage} ${script.callToAction}`
+                    )
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl transition-all cursor-pointer hover:scale-[1.02]"
+                  title="Buat Voice Over audio dari naskah ini"
+                >
+                  <Mic className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>🎤 Voice Over</span>
+                </button>
+              )}
+
               <button
                 onClick={handleGenerateStoryboard}
                 disabled={isLoading}
@@ -1864,6 +1937,83 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Banner Voice Over di Tahap Naskah (Rule 2, 3, 4, 5, 6) */}
+          {activeProject?.voiceOver?.audioUrl ? (
+            <div className="bg-emerald-50/80 border border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <span className="p-2 bg-emerald-600 text-white rounded-xl shadow-2xs shrink-0">
+                  <Volume2 className="w-4 h-4" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-emerald-950">
+                      Voice Over ✓
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      Karakter {activeProject.voiceOver.voiceCharacter} · ±{activeProject.voiceOver.durationSeconds}s
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-600 mt-0.5">
+                    Gaya {activeProject.voiceOver.style} · Tempo {activeProject.voiceOver.speed}x · Tersimpan di Project
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                <audio
+                  controls
+                  src={activeProject.voiceOver.audioUrl}
+                  className="h-8 max-w-[220px]"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleDownloadProjectAudio(activeProject.voiceOver!.audioUrl, activeProject.name || activeProject.title)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-stone-50 text-stone-700 text-xs font-bold rounded-xl border border-stone-200 transition-colors cursor-pointer"
+                  title="Unduh file audio Voice Over (.wav)"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh WAV</span>
+                </button>
+                {onOpenVoiceOver && (
+                  <button
+                    onClick={() => onOpenVoiceOver(activeProject.voiceOver?.text)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                    title="Ganti Voice Over naskah"
+                  >
+                    Ganti Suara
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <span className="p-1.5 bg-stone-200 text-stone-600 rounded-lg shrink-0">
+                  <Mic className="w-4 h-4" />
+                </span>
+                <div>
+                  <span className="font-bold text-stone-700">Voice Over belum dibuat</span>
+                  <p className="text-[11px] text-stone-400">
+                    Ubah 5 bagian naskah di bawah menjadi audio narasi alami dengan satu klik.
+                  </p>
+                </div>
+              </div>
+              {onOpenVoiceOver && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenVoiceOver(
+                      `${script.hook} ${script.problem} ${script.solution} ${script.advantage} ${script.callToAction}`
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-2xs transition-all cursor-pointer hover:scale-[1.02]"
+                >
+                  <Mic className="w-3.5 h-3.5" />
+                  <span>Buat Voice Over</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* 5 Timed Parts */}
           <div className="space-y-4">
@@ -2749,6 +2899,83 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Audio Voice Over Strip di Video Produksi */}
+            {activeProject?.voiceOver?.audioUrl ? (
+              <div className="bg-emerald-50/80 border border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <span className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
+                    <Volume2 className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-emerald-950">
+                        Voice Over ✓
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                        Karakter {activeProject.voiceOver.voiceCharacter} · ±{activeProject.voiceOver.durationSeconds}s
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-600 mt-0.5">
+                      Gaya {activeProject.voiceOver.style} · Tempo {activeProject.voiceOver.speed}x · Tersimpan di Project
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                  <audio
+                    controls
+                    src={activeProject.voiceOver.audioUrl}
+                    className="h-8 max-w-[220px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadProjectAudio(activeProject.voiceOver!.audioUrl, activeProject.name || activeProject.title)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-stone-50 text-stone-700 text-xs font-bold rounded-xl border border-stone-200 transition-colors cursor-pointer"
+                    title="Unduh file audio Voice Over (.wav)"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Unduh WAV</span>
+                  </button>
+                  {onOpenVoiceOver && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenVoiceOver(activeProject.voiceOver?.text)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                      title="Ganti Voice Over video"
+                    >
+                      Ganti Suara
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : onOpenVoiceOver ? (
+              <div className="bg-stone-50 border border-dashed border-stone-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                <div className="flex items-center gap-3">
+                  <span className="p-2 bg-stone-200 text-stone-600 rounded-xl">
+                    <Mic className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-bold text-stone-800">
+                      Tambahkan Voice Over ke Video Project
+                    </h4>
+                    <p className="text-[11px] text-stone-500">
+                      Suarakan narasi naskah video dengan karakter kreator (Rina, Raka, Bayu, Bening).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const combined = scenes.map((s) => s.voiceOver).filter(Boolean).join(' ') || activeProject?.script || '';
+                    onOpenVoiceOver(combined);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer hover:scale-[1.02]"
+                >
+                  <Mic className="w-3.5 h-3.5" />
+                  <span>🎤 Buat Voice Over</span>
+                </button>
+              </div>
+            ) : null}
 
             {/* Sequential Timeline Track Visualization */}
             <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-4">

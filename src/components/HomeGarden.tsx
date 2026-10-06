@@ -24,7 +24,7 @@ import {
   GraduationCap,
   Smile
 } from 'lucide-react';
-import { ActiveNavTab, ChatMessage, ProjectItem, UserMode, CreatorContext, GoogleFlowConnection } from '../types';
+import { ActiveNavTab, ChatMessage, ProjectItem, UserMode, CreatorContext, GoogleFlowConnection, FlowReadyData } from '../types';
 import { sendChatMessage } from '../services/aiService';
 import { calculateProjectProgress } from '../utils/projectProgress';
 import { NewProjectModal } from './NewProjectModal';
@@ -48,6 +48,8 @@ interface HomeGardenProps {
   setCreatorContext?: React.Dispatch<React.SetStateAction<CreatorContext>>;
   connection?: GoogleFlowConnection;
   onOpenConnectionModal?: () => void;
+  onOpenFlowWorkspace?: (data: FlowReadyData) => void;
+  onOpenVoiceOver?: (text?: string) => void;
 }
 
 export const HomeGarden: React.FC<HomeGardenProps> = ({
@@ -65,6 +67,8 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
   setCreatorContext,
   connection,
   onOpenConnectionModal,
+  onOpenFlowWorkspace,
+  onOpenVoiceOver,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -76,6 +80,10 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
   const recognitionRef = useRef<any>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
+  const typingIndicatorRef = useRef<HTMLDivElement>(null);
+
+  const hasUserMessages = chatMessages.some((m) => m.sender === 'user');
 
   const toggleListening = () => {
     try {
@@ -195,6 +203,11 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
       text: messageToSend,
     });
 
+    // Scroll halus dan tenang ke pesan yang baru dikirim / indikator HEJO
+    setTimeout(() => {
+      typingIndicatorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 60);
+
     try {
       const response = await sendChatMessage(
         messageToSend,
@@ -236,7 +249,7 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
       isSubmittingRef.current = false;
       setIsLoading(false);
       setTimeout(() => {
-        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        latestMessageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 100);
     }
   };
@@ -362,6 +375,15 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
       setActiveTab('studio');
       return;
     }
+    if (action.includes('Voice Over') || action.includes('suara') || action.includes('Suara') || action.includes('Audio')) {
+      const lastDraft = [...chatMessages].reverse().find((m) => m.attachedDraft)?.attachedDraft;
+      const textToVoice = lastDraft?.content || 'Halo kreator, ini suara dari HEJO AI.';
+      if (onOpenVoiceOver) {
+        onOpenVoiceOver(textToVoice);
+        return;
+      }
+    }
+
     if (action.includes('Salin')) {
       const lastDraft = [...chatMessages].reverse().find((m) => m.attachedDraft)?.attachedDraft;
       if (lastDraft) {
@@ -429,119 +451,131 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
     setActiveTab('studio');
   };
 
+  const renderChatInputBox = () => (
+    <div className="text-left w-full">
+      <div className="bg-white border-2 border-emerald-500/50 focus-within:border-emerald-600 rounded-3xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all">
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              hasUserMessages
+                ? "Ketik balasan untuk HEJO (contoh: 'Buat lebih mewah', 'Ganti durasi jadi 15 detik')..."
+                : "Contoh: Buat 5 video affiliate untuk produk ini, masing-masing 20 detik..."
+            }
+            rows={hasUserMessages ? 2 : 3}
+            className="w-full text-stone-800 placeholder-stone-400 bg-transparent resize-none focus:outline-none text-base sm:text-lg leading-relaxed pr-10"
+          />
+          {isListening && (
+            <div className="absolute top-0 right-0 flex items-center gap-1 text-xs text-rose-600 font-medium bg-rose-50 px-2.5 py-1 rounded-full animate-pulse border border-rose-200">
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+              <span>Mendengarkan...</span>
+            </div>
+          )}
+        </div>
+
+        {/* 3 Contoh Sederhana */}
+        <div className="flex items-center gap-2 text-xs text-stone-500 mt-2.5 pt-1.5 flex-wrap border-t border-stone-100">
+          <span className="font-bold text-stone-400">Contoh:</span>
+          {[
+            'Buat video affiliate untuk produk ini',
+            'Buat gambar produk ini',
+            'Buat prompt video',
+          ].map((ex, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => setInputText(ex)}
+              className="text-stone-600 hover:text-emerald-800 hover:bg-emerald-50 px-2.5 py-1 rounded-lg border border-stone-200/80 hover:border-emerald-300 transition-colors cursor-pointer text-left font-medium text-[11px] sm:text-xs"
+            >
+              “{ex}”
+            </button>
+          ))}
+        </div>
+
+        {/* Bottom Bar: Tombol Bicara & Tombol Kirim */}
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-100 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={toggleListening}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              isListening
+                ? 'bg-rose-500 text-white shadow-sm ring-2 ring-rose-300'
+                : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+            }`}
+            title="Bicara dengan Mikrofon"
+          >
+            {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-600" />}
+            <span>{isListening ? 'Selesai' : '🎤 Bicara'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSendMessage()}
+            disabled={!inputText.trim() || isLoading}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
+          >
+            <span>Kirim</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* HANYA 3 AKSI UTAMA (Requirement 3) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-left">
+        <button
+          type="button"
+          onClick={handleActionPrompt}
+          disabled={isLoading}
+          className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-white border-2 border-stone-200/90 hover:border-indigo-500 hover:bg-indigo-50/40 shadow-xs hover:shadow-md transition-all font-black text-stone-800 hover:text-indigo-900 cursor-pointer active:scale-[0.98] group"
+        >
+          <span className="text-xl group-hover:scale-110 transition-transform">📝</span>
+          <span className="text-xs sm:text-sm tracking-wide">BUAT PROMPT</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleActionImage}
+          disabled={isLoading}
+          className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-white border-2 border-stone-200/90 hover:border-emerald-500 hover:bg-emerald-50/40 shadow-xs hover:shadow-md transition-all font-black text-stone-800 hover:text-emerald-900 cursor-pointer active:scale-[0.98] group"
+        >
+          <span className="text-xl group-hover:scale-110 transition-transform">🖼️</span>
+          <span className="text-xs sm:text-sm tracking-wide">BUAT GAMBAR</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleActionVideo}
+          disabled={isLoading}
+          className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-700/20 transition-all font-black text-xs sm:text-sm tracking-wide cursor-pointer hover:scale-[1.01] active:scale-[0.98] group"
+        >
+          <span className="text-xl group-hover:scale-110 transition-transform">🎬</span>
+          <span>BUAT VIDEO</span>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-12 pb-16">
+    <div className="space-y-8 pb-16">
       {/* 1. BAGIAN UTAMA BERANDA: SIMPLE OUTSIDE, POWERFUL INSIDE */}
-      <section className="text-center pt-4 sm:pt-8 max-w-3xl mx-auto px-4">
-        {/* Judul Besar & Subjudul Sederhana (Requirement 2) */}
-        <h1 className="text-3xl sm:text-5xl font-black text-stone-900 tracking-tight">
+      <section className="text-center pt-2 sm:pt-4 max-w-3xl mx-auto px-4">
+        {/* Judul & Subjudul Sederhana - Tenang dan Stabil */}
+        <h1 className="font-black text-stone-900 tracking-tight text-3xl sm:text-4xl">
           Apa yang ingin kamu buat?
         </h1>
-        <p className="mt-2 text-stone-600 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
+        <p className="text-stone-600 max-w-xl mx-auto leading-relaxed mt-1.5 text-sm sm:text-base">
           Ceritakan saja. HEJO akan membantu menyiapkan semuanya.
         </p>
 
-        {/* SATU KOTAK INPUT/CHAT UTAMA (Requirement 2) */}
-        <div className="mt-6 text-left">
-          <div className="bg-white border-2 border-emerald-500/50 focus-within:border-emerald-600 rounded-3xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all">
-            <div className="relative">
-              <textarea
-                ref={textareaRef}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Contoh: Buat 5 video affiliate untuk produk ini, masing-masing 20 detik..."
-                rows={3}
-                className="w-full text-stone-800 placeholder-stone-400 bg-transparent resize-none focus:outline-none text-base sm:text-lg leading-relaxed pr-10"
-              />
-              {isListening && (
-                <div className="absolute top-0 right-0 flex items-center gap-1 text-xs text-rose-600 font-medium bg-rose-50 px-2.5 py-1 rounded-full animate-pulse border border-rose-200">
-                  <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                  <span>Mendengarkan...</span>
-                </div>
-              )}
-            </div>
-
-            {/* 3 Contoh Sederhana */}
-            <div className="flex items-center gap-2 text-xs text-stone-500 mt-2.5 pt-1.5 flex-wrap border-t border-stone-100">
-              <span className="font-bold text-stone-400">Contoh:</span>
-              {[
-                'Buat video affiliate untuk produk ini',
-                'Buat gambar produk ini',
-                'Buat prompt video',
-              ].map((ex, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setInputText(ex)}
-                  className="text-stone-600 hover:text-emerald-800 hover:bg-emerald-50 px-2.5 py-1 rounded-lg border border-stone-200/80 hover:border-emerald-300 transition-colors cursor-pointer text-left font-medium text-[11px] sm:text-xs"
-                >
-                  “{ex}”
-                </button>
-              ))}
-            </div>
-
-            {/* Bottom Bar: Tombol Bicara & Tombol Kirim */}
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-100 flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={toggleListening}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  isListening
-                    ? 'bg-rose-500 text-white shadow-sm ring-2 ring-rose-300'
-                    : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
-                }`}
-                title="Bicara dengan Mikrofon"
-              >
-                {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-600" />}
-                <span>{isListening ? 'Selesai' : '🎤 Bicara'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSendMessage()}
-                disabled={!inputText.trim() || isLoading}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
-              >
-                <span>Kirim</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+        {/* Kotak Input Utama saat belum ada percakapan aktif */}
+        {!hasUserMessages && (
+          <div className="mt-6">
+            {renderChatInputBox()}
           </div>
-        </div>
-
-        {/* HANYA 3 AKSI UTAMA (Requirement 3) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-left">
-          <button
-            type="button"
-            onClick={handleActionPrompt}
-            disabled={isLoading}
-            className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-white border-2 border-stone-200/90 hover:border-indigo-500 hover:bg-indigo-50/40 shadow-xs hover:shadow-md transition-all font-black text-stone-800 hover:text-indigo-900 cursor-pointer active:scale-[0.98] group"
-          >
-            <span className="text-xl group-hover:scale-110 transition-transform">📝</span>
-            <span className="text-xs sm:text-sm tracking-wide">BUAT PROMPT</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleActionImage}
-            disabled={isLoading}
-            className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-white border-2 border-stone-200/90 hover:border-emerald-500 hover:bg-emerald-50/40 shadow-xs hover:shadow-md transition-all font-black text-stone-800 hover:text-emerald-900 cursor-pointer active:scale-[0.98] group"
-          >
-            <span className="text-xl group-hover:scale-110 transition-transform">🖼️</span>
-            <span className="text-xs sm:text-sm tracking-wide">BUAT GAMBAR</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleActionVideo}
-            disabled={isLoading}
-            className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-700/20 transition-all font-black text-xs sm:text-sm tracking-wide cursor-pointer hover:scale-[1.01] active:scale-[0.98] group"
-          >
-            <span className="text-xl group-hover:scale-110 transition-transform">🎬</span>
-            <span>BUAT VIDEO</span>
-          </button>
-        </div>
+        )}
       </section>
 
       {/* RUANG OBROLAN INTERAKTIF DENGAN HEJO (Teman Kreator) */}
@@ -586,11 +620,13 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
           )}
 
           <div className="space-y-5">
-            {chatMessages.map((msg) => {
+            {chatMessages.map((msg, idx) => {
               const isHejo = msg.sender === 'hejo';
+              const isLatest = idx === chatMessages.length - 1;
               return (
                 <div
                   key={msg.id}
+                  ref={isLatest ? latestMessageRef : undefined}
                   className={`flex flex-col ${isHejo ? 'items-start' : 'items-end'}`}
                 >
                   {/* Sender Label */}
@@ -642,6 +678,8 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
                             msg.attachedDraft?.content
                           );
                         }}
+                        onOpenFlowWorkspace={onOpenFlowWorkspace}
+                        onOpenVoiceOver={onOpenVoiceOver}
                         showToast={showToast}
                       />
                     )}
@@ -798,6 +836,15 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
                             <ArrowRight className="w-3.5 h-3.5" />
                           </button>
 
+                          {onOpenVoiceOver && (
+                            <button
+                              onClick={() => onOpenVoiceOver(msg.attachedDraft!.content)}
+                              className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-lg transition-all shadow-xs cursor-pointer hover:scale-[1.02]"
+                            >
+                              🎤 Buat Voice Over
+                            </button>
+                          )}
+
                           {msg.attachedDraft.type === 'script' && (
                             <button
                               onClick={() => handleSendMessage('🎬 Buat Storyboard')}
@@ -837,7 +884,31 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
                 </div>
               );
             })}
+
+            {/* Indikator Typing Alami & Tenang saat HEJO sedang menyiapkan */}
+            {isLoading && (
+              <div ref={typingIndicatorRef} className="flex flex-col items-start pt-1">
+                <div className="flex items-center gap-1.5 mb-1 px-1">
+                  <span className="text-[11px] font-bold text-stone-600">HEJO</span>
+                  <span className="text-[10px] text-stone-400">· Teman Kreator</span>
+                </div>
+                <div className="rounded-2xl px-4 py-3 bg-white border border-stone-200 text-stone-700 shadow-xs flex items-center gap-2.5 text-xs sm:text-sm">
+                  <span className="inline-flex gap-1 items-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse [animation-delay:150ms]"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse [animation-delay:300ms]"></span>
+                  </span>
+                  <span className="font-medium text-stone-600">HEJO sedang menyiapkan...</span>
+                </div>
+              </div>
+            )}
+
             <div ref={chatBottomRef} />
+          </div>
+
+          {/* Kolom Chat Utama Lanjutan di bawah percakapan (Tetap mudah ditemukan) */}
+          <div className="mt-6 pt-4 border-t border-stone-100">
+            {renderChatInputBox()}
           </div>
         </section>
       )}
@@ -920,6 +991,16 @@ export const HomeGarden: React.FC<HomeGardenProps> = ({
                         <span className="text-stone-400 text-[11px]">Jumlah Konten:</span>
                         <span className="font-semibold text-stone-800">{contentCount}</span>
                       </div>
+                      {project.voiceOver?.audioUrl && (
+                        <div className="flex items-center justify-between pt-1 border-t border-stone-200/60">
+                          <span className="text-emerald-700 font-bold text-[11px] flex items-center gap-1">
+                            🎙️ Voice Over:
+                          </span>
+                          <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                            {project.voiceOver.voiceCharacter} ({project.voiceOver.durationSeconds}s)
+                          </span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between pt-1 border-t border-stone-200/60">
                         <span className="text-stone-400 text-[11px]">Status:</span>
                         <span className="font-bold text-emerald-700">{statusLabel} ({prog.overallPercent}%)</span>

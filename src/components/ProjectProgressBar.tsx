@@ -18,6 +18,7 @@ interface ProjectProgressBarProps {
   onSelectProject?: (id: string) => void;
   onOpenNewProjectModal?: () => void;
   onNavigateStage?: (stage: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'videoproduction') => void;
+  onOpenVoiceOver?: (text?: string) => void;
   onNavigateTab?: (tab: any) => void;
   compact?: boolean;
 }
@@ -28,6 +29,7 @@ export const ProjectProgressBar: React.FC<ProjectProgressBarProps> = ({
   onSelectProject,
   onOpenNewProjectModal,
   onNavigateStage,
+  onOpenVoiceOver,
   onNavigateTab,
   compact = false,
 }) => {
@@ -35,16 +37,28 @@ export const ProjectProgressBar: React.FC<ProjectProgressBarProps> = ({
   const progressData = calculateProjectProgress(project);
 
   const handleNextAction = () => {
+    if (progressData.nextAction.targetStage === 'voiceover') {
+      if (onOpenVoiceOver) {
+        onOpenVoiceOver(project?.voiceOver?.text || project?.script || '');
+        return;
+      }
+    }
     if (progressData.nextAction.targetTab === 'motion' && onNavigateTab) {
       onNavigateTab('motion');
       return;
     }
     if (onNavigateStage) {
-      onNavigateStage(progressData.nextAction.targetStage);
+      onNavigateStage(progressData.nextAction.targetStage as any);
     }
   };
 
   const handleStageClick = (key: string) => {
+    if (key === 'voiceover') {
+      if (onOpenVoiceOver) {
+        onOpenVoiceOver(project?.voiceOver?.text || project?.script || '');
+        return;
+      }
+    }
     if (key === 'motion') {
       if (onNavigateTab) onNavigateTab('motion');
       return;

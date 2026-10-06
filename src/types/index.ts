@@ -5,6 +5,7 @@ export type ActiveNavTab =
   | 'home' 
   | 'projects' 
   | 'account'
+  | 'flow'
   | 'ideas' 
   | 'studio' 
   | 'motion'
@@ -76,6 +77,16 @@ export interface VideoPackData {
   updatedAt: string;
   totalDuration: string;
   shots: VideoPackShot[];
+  voiceOver?: {
+    audioUrl: string;
+    durationSeconds: number;
+    text: string;
+    voiceCharacter: string;
+    voiceName?: string;
+    style?: string;
+    speed?: number;
+    createdAt?: string;
+  };
 }
 
 export interface PipelineShot {
@@ -361,6 +372,19 @@ export interface ProjectItem {
     tone?: string;
     pace?: string;
     character?: string;
+  };
+
+  // Voice Over / VANA Engine Native Result
+  voiceOver?: {
+    id?: string;
+    audioUrl: string;
+    durationSeconds: number;
+    text: string;
+    voiceCharacter: string;
+    voiceName: string;
+    style: string;
+    speed: number;
+    createdAt: string;
   };
 
   // Backwards compatibility data & Character linkages

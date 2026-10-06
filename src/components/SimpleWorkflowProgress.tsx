@@ -8,6 +8,7 @@ interface SimpleWorkflowProgressProps {
   hasScript: boolean;
   hasStoryboard: boolean;
   hasShotList: boolean;
+  hasVoiceOver?: boolean;
   imagesCompletedCount: number;
   totalShotsCount: number;
   isGeneratingAllImages: boolean;
@@ -16,6 +17,7 @@ interface SimpleWorkflowProgressProps {
   onGenerateAllVisuals: () => void;
   onProceedToVideo: () => void;
   onOpenVideoPack?: () => void;
+  onOpenVoiceOver?: () => void;
   userMode: UserMode;
 }
 
@@ -25,6 +27,7 @@ export const SimpleWorkflowProgress: React.FC<SimpleWorkflowProgressProps> = ({
   hasScript,
   hasStoryboard,
   hasShotList,
+  hasVoiceOver = false,
   imagesCompletedCount,
   totalShotsCount,
   isGeneratingAllImages,
@@ -33,6 +36,7 @@ export const SimpleWorkflowProgress: React.FC<SimpleWorkflowProgressProps> = ({
   onGenerateAllVisuals,
   onProceedToVideo,
   onOpenVideoPack,
+  onOpenVoiceOver,
   userMode,
 }) => {
   // Determine statuses for the 9 progress items (Requirement 2)
@@ -100,6 +104,12 @@ export const SimpleWorkflowProgress: React.FC<SimpleWorkflowProgressProps> = ({
       id: 'motion',
       label: 'Motion',
       done: hasShotList, // Smart motion is automatically assigned to all shots (Requirement 5)
+      inProgress: false,
+    },
+    {
+      id: 'voice_over',
+      label: 'Voice Over',
+      done: Boolean(hasVoiceOver),
       inProgress: false,
     },
     {

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
 import { relayRouterChat } from './relayRouter.ts';
 import { authRouter } from './server/oauthRoutes.ts';
+import { generateVoiceOverAudio, VOICE_CHARACTERS, VOICE_STYLES } from './server/voiceOverService.ts';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,6 +26,26 @@ const GENERATED_IMAGES_DIR = path.join(__dirname, 'public', 'generated-images');
 if (!fs.existsSync(GENERATED_IMAGES_DIR)) {
   fs.mkdirSync(GENERATED_IMAGES_DIR, { recursive: true });
 }
+
+// Dedicated persistent directory for generated voice-over audio
+const GENERATED_AUDIO_DIR = path.join(__dirname, 'public', 'generated-audio');
+if (!fs.existsSync(GENERATED_AUDIO_DIR)) {
+  fs.mkdirSync(GENERATED_AUDIO_DIR, { recursive: true });
+}
+
+// Serve public assets (including favicon, generated-images, generated-audio)
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/generated-images', express.static(GENERATED_IMAGES_DIR, { maxAge: '30d' }));
+app.use('/generated-audio', express.static(GENERATED_AUDIO_DIR, { maxAge: '30d' }));
+
+// Explicit Favicon routes to guarantee 200 OK on preview iframe
+app.get('/favicon.ico', (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
+});
+app.get('/favicon.svg', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.sendFile(path.join(__dirname, 'public', 'favicon.svg'));
+});
 
 // In-memory buffer cache for rapid image serving
 const inMemoryImages = new Map<string, { buffer: Buffer; mime: string }>();
@@ -278,6 +299,54 @@ app.post('/api/hejo/chat', async (req: Request, res: Response) => {
       req.body?.context || {},
       req.body?.userMode || 'SIMPLE'
     );
+    return res.json(fallback);
+  }
+});
+
+// Voice Over (VANA Engine Native di HEJO)
+app.get('/api/hejo/voice-over/options', (_req: Request, res: Response) => {
+  return res.json({
+    characters: VOICE_CHARACTERS,
+    styles: VOICE_STYLES,
+    speeds: [
+      { label: '🐢 Santai (0.85x)', value: 0.85 },
+      { label: '⚖️ Normal (1.0x)', value: 1.0 },
+      { label: '⚡ Cepat FYP (1.2x)', value: 1.2 },
+    ],
+  });
+});
+
+app.post('/api/hejo/voice-over', async (req: Request, res: Response) => {
+  try {
+    const { text, voiceCharacter = 'rina', voiceName, style = 'casual', speed = 1.0, projectId } = req.body;
+
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: 'Teks naskah untuk Voice Over diperlukan' });
+    }
+
+    const result = await generateVoiceOverAudio(
+      {
+        text: text.trim(),
+        voiceCharacter,
+        voiceName,
+        style,
+        speed: Number(speed) || 1.0,
+        projectId,
+      },
+      ai,
+      apiKey
+    );
+
+    return res.json(result);
+  } catch (err: any) {
+    console.error('Error generating Voice Over:', err);
+    // Graceful fallback to native synthesized audio
+    const fallback = await generateVoiceOverAudio({
+      text: req.body?.text || 'Suara kreatif HEJO AI.',
+      voiceCharacter: req.body?.voiceCharacter || 'rina',
+      style: req.body?.style || 'casual',
+      speed: Number(req.body?.speed) || 1.0,
+    });
     return res.json(fallback);
   }
 });

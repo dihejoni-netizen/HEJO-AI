@@ -3,7 +3,7 @@ import { ProjectItem } from '../types';
 export type StageProgressStatus = 'completed' | 'in_progress' | 'pending';
 
 export interface ProgressItem {
-  key: 'idea' | 'script' | 'storyboard' | 'visual' | 'motion' | 'video' | 'final';
+  key: 'idea' | 'script' | 'storyboard' | 'visual' | 'motion' | 'voiceover' | 'video' | 'final';
   label: string;
   badgeText: string;
   status: StageProgressStatus;
@@ -13,7 +13,7 @@ export interface ProgressItem {
 
 export interface NextActionStep {
   label: string;
-  targetStage: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'videoproduction';
+  targetStage: 'idea' | 'script' | 'storyboard' | 'shotlist' | 'voiceover' | 'videoproduction';
   targetTab: 'studio' | 'motion';
   description: string;
 }
@@ -113,7 +113,12 @@ export function calculateProjectProgress(project: ProjectItem | null): ProjectPr
   const isMotionComplete = totalShots > 0 && motionCount >= totalShots;
   const isMotionInProgress = motionCount > 0 && motionCount < totalShots;
 
-  // 6. VIDEO Check
+  // 6. VOICE OVER Check
+  const hasVoiceOver = Boolean(
+    project.voiceOver?.audioUrl && project.voiceOver.audioUrl.trim().length > 0
+  );
+
+  // 7. VIDEO Check
   const videoReady = Boolean(
     project.videos?.timelineReady ||
     (project.currentStage === 'videoproduction' && visualImagesCount >= totalShots) ||
@@ -122,10 +127,10 @@ export function calculateProjectProgress(project: ProjectItem | null): ProjectPr
   const videoCount = videoReady ? totalShots : 0;
   const isVideoComplete = videoReady && visualImagesCount >= totalShots;
 
-  // 7. FINAL Check
+  // 8. FINAL Check
   const isFinalComplete = project.status === 'ready' || project.status === 'completed';
 
-  // Build items array
+  // Build items array: Naskah -> Storyboard -> Visual -> Voice Over -> Video/Flow Pack
   const items: ProgressItem[] = [
     {
       key: 'idea',
@@ -162,8 +167,14 @@ export function calculateProjectProgress(project: ProjectItem | null): ProjectPr
       totalCount: totalShots,
     },
     {
+      key: 'voiceover',
+      label: 'Voice Over',
+      badgeText: hasVoiceOver ? 'VOICE OVER ✓' : 'VOICE OVER',
+      status: hasVoiceOver ? 'completed' : (hasScript || isVisualComplete ? 'in_progress' : 'pending'),
+    },
+    {
       key: 'video',
-      label: 'Video',
+      label: 'Video / Flow',
       badgeText: isVideoComplete ? `VIDEO ${totalShots}/${totalShots} ✓` : `VIDEO ${videoCount}/${totalShots}`,
       status: isVideoComplete ? 'completed' : (visualImagesCount > 0 ? 'in_progress' : 'pending'),
       currentCount: videoCount,
@@ -220,12 +231,19 @@ export function calculateProjectProgress(project: ProjectItem | null): ProjectPr
       targetTab: 'motion',
       description: 'Langkah 5: Tentukan pergerakan kamera sinematik untuk shot visualmu.',
     };
+  } else if (!hasVoiceOver) {
+    nextAction = {
+      label: 'Lanjutkan ke Voice Over',
+      targetStage: 'voiceover',
+      targetTab: 'studio',
+      description: 'Langkah 6: Hasilkan audio Voice Over untuk naskah video project.',
+    };
   } else if (!isVideoComplete || currentStage !== 'videoproduction') {
     nextAction = {
-      label: 'Lanjutkan ke Video Produksi',
+      label: 'Lanjutkan ke Video / Flow Pack',
       targetStage: 'videoproduction',
       targetTab: 'studio',
-      description: 'Langkah 6: Putar timeline dan pratinjau rangkaian video 4 shot.',
+      description: 'Langkah 7: Putar timeline dan pratinjau rangkaian video 4 shot.',
     };
   } else {
     nextAction = {

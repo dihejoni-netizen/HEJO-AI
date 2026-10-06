@@ -100,21 +100,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             })}
           </nav>
 
-          {/* Right Controls: Flow AI Status Badge */}
+          {/* Right Controls: Flow AI Status Indicator (Pure Status - Not a Button) */}
           <div className="hidden sm:flex items-center gap-2.5">
-            {/* Status Koneksi Google/Flow AI (Requirement 1, 2, 7) */}
-            <button
-              type="button"
-              onClick={onOpenConnectionModal || (() => handleSelectTab('account'))}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer hover:scale-[1.01] ${
+            <div
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border select-none transition-colors ${
                 connection?.isConnected
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-2xs'
-                  : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 shadow-2xs'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs'
+                  : 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs'
               }`}
               title={
                 connection?.isConnected
-                  ? `Flow AI Terhubung: ${connection.googleEmail} (Klik untuk pengaturan)`
-                  : 'Flow AI: Belum terhubung (Klik untuk Hubungkan Google)'
+                  ? `Flow AI: Terhubung (${connection.googleEmail || 'Akun Aktif'})`
+                  : 'Flow AI: Belum terhubung (Kelola di menu Akun)'
               }
             >
               <span className="text-[10px]">{connection?.isConnected ? '🟢' : '🟡'}</span>
@@ -123,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-[11px] font-medium">
                 {connection?.isConnected ? 'Terhubung' : 'Belum terhubung'}
               </span>
-            </button>
+            </div>
           </div>
 
           {/* Mobile menu toggle */}
@@ -164,13 +161,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           <div className="pt-2 border-t border-stone-100">
-            <button
-              type="button"
-              onClick={() => {
-                if (onOpenConnectionModal) onOpenConnectionModal();
-                setMobileMenuOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors ${
+            <div
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold border select-none transition-colors ${
                 connection?.isConnected
                   ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
                   : 'bg-amber-50 text-amber-900 border-amber-300'
@@ -180,10 +172,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>{connection?.isConnected ? '🟢' : '🟡'}</span>
                 <span>Flow AI: {connection?.isConnected ? 'Terhubung' : 'Belum terhubung'}</span>
               </div>
-              <span className="text-[11px] underline">
-                {connection?.isConnected ? 'Buka Flow' : 'Hubungkan'}
+              <span className="text-[11px] text-stone-500 font-normal">
+                {connection?.isConnected ? 'Status Aktif' : 'Status'}
               </span>
-            </button>
+            </div>
           </div>
         </div>
       )}

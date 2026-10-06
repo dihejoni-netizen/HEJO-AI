@@ -19,7 +19,10 @@ import {
   MapPin, 
   Box, 
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Mic,
+  Volume2,
+  Download
 } from 'lucide-react';
 import { PipelineShot, ProjectItem, CharacterDNA, PipelineScene, VideoPackData, VideoPackShot } from '../types';
 
@@ -32,6 +35,7 @@ interface VideoPackViewProps {
   showToast: (msg: string) => void;
   onSaveVideoPackToProject: (videoPack: VideoPackData) => void;
   onBackToTimeline?: () => void;
+  onOpenVoiceOver?: (text?: string) => void;
 }
 
 export const VideoPackView: React.FC<VideoPackViewProps> = ({
@@ -43,6 +47,7 @@ export const VideoPackView: React.FC<VideoPackViewProps> = ({
   showToast,
   onSaveVideoPackToProject,
   onBackToTimeline,
+  onOpenVoiceOver,
 }) => {
   // Format Aspect Ratio: 16:9, 9:16, 1:1
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16' | '1:1'>(() => {
@@ -152,6 +157,7 @@ ${scene?.voiceOver ? `• Dialog / Audio: "${scene.voiceOver}"` : ''}`;
       updatedAt: 'Baru saja',
       totalDuration: `${totalDuration} detik`,
       shots: packShots,
+      voiceOver: activeProject?.voiceOver,
     };
   };
 
@@ -179,12 +185,16 @@ ${promptIndo}`;
       })
       .join('\n\n\n');
 
+    const voiceOverLine = activeProject?.voiceOver?.audioUrl
+      ? `Voice Over: Tersimpan ✓ (Karakter ${activeProject.voiceOver.voiceCharacter} · ±${activeProject.voiceOver.durationSeconds}s)\n`
+      : 'Voice Over: Naskah siap (audio belum dibuat)\n';
+
     const header = `# HEJO AI - VIDEO PRODUCTION PACK
 Project: ${projectName}
 Format Rasio: ${aspectRatio}
 Total Shot: ${shots.length} Shot
 Total Durasi: ${totalDuration} Detik
-Dibuat: Baru saja
+${voiceOverLine}Dibuat: Baru saja
 Catatan: Siap digunakan langsung di generator video AI (Kling, Runway, Luma, Sora, Pika) maupun panduan kamera.
 
 `;
@@ -341,6 +351,84 @@ Catatan: Siap digunakan langsung di generator video AI (Kling, Runway, Luma, Sor
               })}
             </div>
           </div>
+        </div>
+
+        {/* Voice Over Production Asset Strip (Rule 2, 3, 4, 5, 9) */}
+        <div className="mt-4 pt-3.5 border-t border-stone-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          {activeProject?.voiceOver?.audioUrl ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-2.5">
+                <span className="p-1.5 bg-emerald-600 text-white rounded-lg shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-white">Voice Over ✓</span>
+                    <span className="text-emerald-400 font-semibold">Tersimpan di Video Pack</span>
+                  </div>
+                  <p className="text-[11px] text-stone-400 mt-0.5">
+                    Karakter {activeProject.voiceOver.voiceCharacter} · Durasi ±{activeProject.voiceOver.durationSeconds}s · Siap diputar atau diunduh
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
+                <audio
+                  controls
+                  src={activeProject.voiceOver.audioUrl}
+                  className="h-7 max-w-[200px]"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    showToast('⬇️ Mengunduh file WAV Voice Over...');
+                    const a = document.createElement('a');
+                    a.href = activeProject.voiceOver!.audioUrl;
+                    a.download = `voiceover_${projectName.replace(/\s+/g, '_')}.wav`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-bold rounded-lg border border-stone-700 transition-colors cursor-pointer"
+                  title="Unduh file WAV Voice Over"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh WAV</span>
+                </button>
+                {onOpenVoiceOver && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenVoiceOver(activeProject.voiceOver?.text)}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                    title="Ganti Voice Over paket video"
+                  >
+                    Ganti Suara
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-2 text-stone-400">
+                <Mic className="w-3.5 h-3.5 text-stone-500" />
+                <span>Voice Over: Belum dibuat untuk paket video ini</span>
+              </div>
+              {onOpenVoiceOver && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const combined = scenes.map((s) => s.voiceOver).filter(Boolean).join(' ') || activeProject?.script || '';
+                    onOpenVoiceOver(combined);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                  title="Buat Voice Over untuk seluruh narasi video"
+                >
+                  <Mic className="w-3.5 h-3.5" />
+                  <span>+ Buat Voice Over</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

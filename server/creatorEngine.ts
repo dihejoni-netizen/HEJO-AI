@@ -1014,6 +1014,195 @@ ${advText}
     };
   }
 
+  // === CASE: PANDUAN PENGHASILAN DARI HP (IDE -> KARYA -> KONTEN -> PELUANG) ===
+  if (
+    (text.includes('menghasilkan uang') || text.includes('cari uang') || text.includes('dapat uang') || text.includes('dapetin uang') || text.includes('cuan')) &&
+    (text.includes('hp') || text.includes('mulai') || text.includes('belum tahu') || text.includes('bingung'))
+  ) {
+    ctx.tujuan = 'mencari peluang dari HP';
+    return {
+      reply: `Memulai dari HP adalah langkah awal yang sangat bagus! Kita tidak perlu alat mahal atau skill rumit.\n\nPrinsipnya sederhana: **IDE → KARYA → KONTEN → PELUANG**.\n\nDi HEJO, ada 5 arah sederhana yang bisa kamu pilih sesuai kenyamananmu:\n1. 🚀 **Affiliate** — Merekomendasikan produk orang lain tanpa perlu punya stok barang.\n2. 🎬 **Membuat Konten** — Berbagi video cerita, hiburan, atau aktivitas yang kamu sukai.\n3. 📦 **Menjual Produk** — Membantu pemasaran produk sendiri (kuliner, fashion, parfum, dll).\n4. 🤝 **Menawarkan Jasa** — Menunjukkan keahlianmu ke calon pelanggan.\n5. 🎨 **Karya Digital** — Membuat visual, desain, atau materi kreatif.\n\nMana arah yang paling membuatmu penasaran untuk dicoba pertama kali?`,
+      suggestedActions: [
+        '🚀 Affiliate Produk',
+        '🎬 Bikin Konten TikTok',
+        '📦 Jual Produk Sendiri',
+        '🤝 Tawarkan Jasa',
+        '🎨 Karya Digital'
+      ],
+      updatedContext: {
+        ...ctx,
+        tujuan: 'mencari peluang dari HP',
+      }
+    };
+  }
+
+  // === CASE: PRODUK PARFUM & JUAL LEWAT KONTEN ===
+  if (text.includes('parfum') || (activeProduct === 'parfum' && (text.includes('jual') || text.includes('konten') || text.includes('video')))) {
+    ctx.produk = 'parfum';
+    ctx.business = 'parfum';
+    if (!ctx.platform) ctx.platform = 'TikTok';
+    if (!ctx.tujuan) ctx.tujuan = 'pemasaran produk parfum';
+    if (!ctx.jenisKonten) ctx.jenisKonten = 'video';
+
+    return {
+      reply: `Siap! Produk parfum punya daya tarik visual dan storytelling yang sangat kuat, karena kita bisa menggambarkan aroma lewat suasana elegan, rasa percaya diri, atau aktivitas harian.\n\nBiar konsepnya tepat sasaran, mana sudut pandang cerita yang paling cocok untuk parfummu:\n1. ✨ **Suasana Mewah & Elegan** (Visual botol estetik & nuansa premium)\n2. ⏳ **Uji Ketahanan Seharian** (Aktivitas padat tapi wangi tetap nempel)\n3. 💬 **Cerita Percaya Diri** (Review jujur & pujian dari orang sekitar)\n\nMana gaya yang ingin kita buat?`,
+      suggestedActions: [
+        '✨ Visual Mewah & Elegan',
+        '⏳ Uji Tahan Seharian',
+        '💬 Cerita Percaya Diri',
+        '🎬 Buat Naskah 30 Detik'
+      ],
+      updatedContext: {
+        ...ctx,
+        produk: 'parfum',
+        business: 'parfum',
+        tujuan: 'pemasaran produk parfum',
+        platform: 'TikTok',
+        jenisKonten: 'video',
+      }
+    };
+  }
+
+  // === CASE: BAHASA NATURAL & ITERASI KREATIF ===
+  // B1. "Buat lebih mewah"
+  if (text.includes('lebih mewah') || text.includes('buat mewah') || text.includes('nuansa mewah')) {
+    ctx.gaya = 'mewah & elegan';
+    ctx.tone = 'Mewah & Eksklusif';
+    const prodName = ctx.produk || 'produk ini';
+    return {
+      reply: `Siap, saya ubah menjadi gaya lebih premium!\n\nVisual diarahkan ke pencahayaan *golden hour* lembut dengan detail tekstur eksklusif, sudut kamera sinematik stabil, dan narasi yang anggun menonjolkan nilai prestise ${prodName}.`,
+      suggestedActions: [
+        '🎬 Buatkan Naskah Mewah',
+        '🖼️ Lihat Visual Mewah',
+        '🚀 Lanjut ke Flow',
+        '💾 Simpan ke Project'
+      ],
+      updatedContext: {
+        ...ctx,
+        gaya: 'mewah & elegan',
+        tone: 'Mewah & Eksklusif',
+      },
+      structuredDraft: {
+        type: 'script',
+        title: `Konsep Premium & Mewah: ${capitalize(prodName)}`,
+        content: `[0-3s | Hook Mewah]: "Kemewahan bukan tentang tampil mencolok, tapi tentang detail yang tak terlupakan."\n[3-10s | Estetika Visual]: Close-up sinematik botol/kemasan ${prodName} dengan pantulan cahaya lembut, latar minimalis marmer/kayu alami.\n[10-20s | Keunggulan Eksklusif]: Narasi tenang: "Diciptakan untuk kamu yang menghargai kualitas terbaik di setiap momen berharga."\n[20-30s | Ajakan Anggun]: "Temukan sentuhan eksklusif ${prodName} sekarang lewat link resmi di bio."`
+      }
+    };
+  }
+
+  // B2. "Buat lebih lucu"
+  if (text.includes('lebih lucu') || text.includes('bikin lucu') || text.includes('humor')) {
+    ctx.gaya = 'lucu & relate';
+    ctx.tone = 'Humor & Menghibur';
+    const prodName = ctx.produk || 'produk ini';
+    return {
+      reply: `Siap! Saya ubah menjadi gaya komedi yang relate dengan kehidupan sehari-hari.\n\nKonten akan dibuka dengan situasi konyol yang sering dialami penonton, lalu menghadirkan ${prodName} sebagai penyelamat suasana!`,
+      suggestedActions: [
+        '🎬 Buat Naskah Komedi',
+        '💡 Tambah Hook Lucu',
+        '💾 Simpan ke Project'
+      ],
+      updatedContext: {
+        ...ctx,
+        gaya: 'lucu & relate',
+        tone: 'Humor & Menghibur',
+      },
+      structuredDraft: {
+        type: 'script',
+        title: `Konsep Lucu & Relate: ${capitalize(prodName)}`,
+        content: `[0-3s | Hook Komedi]: "Pernah nggak sih ngerasa hari kamu udah kacau balau, terus tiba-tiba..."\n[3-10s | Reaksi Ekspresif]: Ekspresi kaget kreator melihat situasi sekitar yang serba salah.\n[10-20s | Hadirnya Produk]: "Untung ada ${prodName}! Sekali coba, langsung berasa waras lagi hidup ini."\n[20-30s | Call to Action]: "Jangan tunggu sampai harimu makin ambyar, buruan amankan di keranjang kuning!"`
+      }
+    };
+  }
+
+  // B3. "Tambah satu scene"
+  if (text.includes('tambah satu scene') || text.includes('tambah 1 scene') || text.includes('tambah scene')) {
+    const prodName = ctx.produk || 'karya kamu';
+    return {
+      reply: `Siap! Saya sudah menambahkan satu scene tambahan (Scene Interaktif & Ulasan Nyata) agar alur cerita ${prodName} semakin meyakinkan penonton.`,
+      suggestedActions: [
+        '🎬 Buka di Studio',
+        '🚀 Lanjut ke Flow',
+        '💾 Simpan ke Project'
+      ],
+      updatedContext: ctx,
+      structuredDraft: {
+        type: 'script',
+        title: `Naskah Tambahan Scene: ${capitalize(prodName)}`,
+        content: `[Scene Tambahan | Ulasan Nyata]:\nVisual: Kreator tersenyum di depan kamera memegang ${prodName}, menunjukkan hasil nyata penggunaan dengan ekspresi spontan dan meyakinkan.\nNarasi: "Jujur ini di luar ekspektasi banget, pantas aja ulasannya bintang lima semua!"\nDurasi: 10 detik`
+      }
+    };
+  }
+
+  // B4. "Buat 5 versi"
+  if (text.includes('buat 5 versi') || text.includes('5 versi') || text.includes('bikin 5 versi')) {
+    return generateMultiAngleAffiliatePackage(`buat 5 konten affiliate ${ctx.produk || 'produk ini'}`, ctx);
+  }
+
+  // B5. "Yang ini kurang menarik"
+  if (text.includes('kurang menarik') || text.includes('ganti hook') || text.includes('kurang greget')) {
+    const prodName = ctx.produk || 'produk ini';
+    return {
+      reply: `Siap! Kita ganti pembukanya dengan 3 opsi hook baru yang jauh lebih kuat dan bikin penonton berhenti scroll:\n\n1. 🔥 **Hook Penasaran**: "Kenapa nggak ada yang ngasih tahu aku rahasia ${prodName} ini dari dulu?!"\n2. ⚡ **Hook Fakta Mengejutkan**: "9 dari 10 orang baru tahu kalau trik kecil ini bikin hasilnya 3x lebih memuaskan."\n3. 🎯 **Hook Relate Keras**: "Stop buang-buang uang kalau kamu masih ngalamin masalah ini..."\n\nMana hook yang paling kamu suka untuk kita jadikan naskah?`,
+      suggestedActions: [
+        '🔥 Pilih Hook 1 (Penasaran)',
+        '⚡ Pilih Hook 2 (Fakta Unik)',
+        '🎯 Pilih Hook 3 (Relate Keras)',
+        '🎬 Buatkan naskah langsung'
+      ],
+      updatedContext: ctx,
+    };
+  }
+
+  // B6. "Buat video 30 detik"
+  if (text.includes('buat video 30 detik') || text.includes('video 30 detik')) {
+    return generateAffiliateFlowPackage(`buat video affiliate ${ctx.produk || 'produk ini'} 30 detik`, ctx);
+  }
+
+  // B7. "Buat suara wanita yang lembut" / "Buat suara" (Voice Over / Vana Guidance)
+  if (text.includes('suara') || text.includes('voice over') || text.includes('voiceover') || text.includes('audio')) {
+    const isSoftFemale = text.includes('wanita') || text.includes('lembut') || text.includes('perempuan');
+    const voiceStyle = isSoftFemale ? 'Wanita Lembut, Hangat & Menenangkan' : 'Pria Santai, Jelas & Bersahabat';
+    const prodName = ctx.produk || 'produk ini';
+
+    return {
+      reply: `Siap! Saya siapkan naskah dengan panduan sulih suara (**${voiceStyle}**).\n\nTempo vokal dibuat santai dan ramah, sehingga pesan tentang ${prodName} terasa seperti rekomendasi tulus dari seorang sahabat:`,
+      suggestedActions: [
+        '🎤 Salin Teks Voice Over',
+        '🚀 Lanjut ke Flow',
+        '💾 Simpan ke Project',
+        '🎬 Buka di Studio'
+      ],
+      updatedContext: {
+        ...ctx,
+        voiceStyle,
+      },
+      structuredDraft: {
+        type: 'script',
+        title: `Panduan Voice Over (${voiceStyle}): ${capitalize(prodName)}`,
+        content: `🎙️ PANDUAN VOICE OVER\nKarakter Suara: ${voiceStyle}\nTempo: 120 kata/menit (tenang & nyaman didengar)\n\n[00:00 - 00:03]: "Kadang, hal terbaik itu datang dari kesederhanaan..."\n[00:03 - 00:12]: "Sama seperti ${prodName}, yang hadir menemani hari-harimu agar terasa lebih ringan dan bermakna."\n[00:12 - 00:20]: "Kualitasnya yang tulus bisa kamu rasakan sejak sentuhan pertama."\n[00:20 - 00:30]: "Yuk, rawat momen bahagiamu hari ini. Temukan selengkapnya di tautan bio ya."`
+      }
+    };
+  }
+
+  // B8. "Jadikan lebih cocok untuk TikTok"
+  if (text.includes('cocok untuk tiktok') || text.includes('sesuaikan tiktok')) {
+    ctx.platform = 'TikTok';
+    const prodName = ctx.produk || 'produk ini';
+    return {
+      reply: `Siap! Saya sesuaikan ritmenya agar ramah algoritma TikTok:\n- Hook cepat di 0–3 detik pertama tanpa intro bertele-tele.\n- Visual dinamis dengan teks on-screen yang mencolok.\n- Ajakan interaksi dan klik keranjang kuning yang jelas.`,
+      suggestedActions: [
+        '🎬 Buatkan Naskah TikTok',
+        '🚀 Siapkan untuk Flow',
+        '💾 Simpan ke Project'
+      ],
+      updatedContext: {
+        ...ctx,
+        platform: 'TikTok',
+      }
+    };
+  }
+
   // === CASE A: BISNIS LAUNDRY (Spesifik & Dinamis) ===
   if (activeProduct === 'laundry' || text.includes('laundry')) {
     ctx.produk = 'laundry';
@@ -1386,7 +1575,7 @@ export async function processHejoConversation(params: {
 }): Promise<CreatorEngineResponse> {
   const { message, history, userMode, currentContext, ai, apiKey } = params;
 
-  // Immediate local engine if no API key, quota cooldown active, or structured motion_context / affiliate / flow / prompt / gambar
+  // Immediate local engine if no API key, quota cooldown active, or recognized co-creator intent
   const lowerMsg = message.toLowerCase();
   if (
     !apiKey || 
@@ -1400,64 +1589,64 @@ export async function processHejoConversation(params: {
     lowerMsg.startsWith('buat prompt') ||
     lowerMsg.startsWith('prompt') ||
     lowerMsg.startsWith('buat gambar') ||
-    lowerMsg.startsWith('gambar')
+    lowerMsg.startsWith('gambar') ||
+    lowerMsg.includes('menghasilkan uang') ||
+    lowerMsg.includes('cari uang') ||
+    lowerMsg.includes('dapat uang') ||
+    lowerMsg.includes('parfum') ||
+    lowerMsg.includes('lebih mewah') ||
+    lowerMsg.includes('lebih lucu') ||
+    lowerMsg.includes('tambah satu scene') ||
+    lowerMsg.includes('tambah scene') ||
+    lowerMsg.includes('5 versi') ||
+    lowerMsg.includes('kurang menarik') ||
+    lowerMsg.includes('video 30 detik') ||
+    lowerMsg.includes('suara') ||
+    lowerMsg.includes('voice over') ||
+    lowerMsg.includes('cocok untuk tiktok')
   ) {
     return processLocalCreatorEngine(message, currentContext, userMode);
   }
 
   try {
-    const systemInstruction = `Kamu adalah "OTAK HEJO", AI Creator Assistant cerdas di HEJO AI (Taman Kreator).
-HEJO bukan chatbot biasa, melainkan teman kerja kreatif yang mengerti bahasa sehari-hari kreator tanpa perlu prompt engineering rumit.
+    const systemInstruction = `Kamu adalah "HEJO", Teman Kreator cerdas di HEJO AI (Taman Kreator).
+PRINSIP UTAMA: "SIMPLE DI DEPAN, PINTAR DI BELAKANG."
+Pengguna tidak perlu paham AI, prompt engineering, storyboard, shot list, motion control, atau teknologi rumit di belakangnya. HEJO adalah teman kerja yang hangat, solutif, dan mengerti bahasa sehari-hari.
 
-PRINSIP PERCAKAPAN MUTLAK:
+KONSEP BESAR: "IDE → KARYA → KONTEN → PELUANG"
+- HEJO tidak boleh menjanjikan penghasilan pasti.
+- HEJO membantu menyediakan ide, pembuatan karya, naskah, visual, dan workflow yang dapat digunakan pengguna untuk membuka peluang (affiliate, jualan produk, jasa, konten, dll).
+
+PANDUAN INTERAKSI KUNCI:
 1. JANGAN langsung memberikan jawaban panjang atau esai. Maksimal 2-3 kalimat hangat dan ramah!
 2. JANGAN menanyakan terlalu banyak pertanyaan sekaligus. TANYAKAN HANYA 1 PERTANYAAN KUNCI untuk langkah berikutnya.
 3. Selalu pahami maksud pengguna, bahasa santai, dan typo sederhana.
 4. SELALU MEMPERTAHANKAN & MENGGABUNGKAN "Creator Context" ANTAR LANGKAH:
-   - tujuan (tujuan konten, misal: video promosi)
+   - tujuan (misal: jualan, affiliate, personal branding, edukasi)
    - jenisKonten (video, visual, script, ide, karakter, produk)
    - platform (TikTok, Reels, Shorts, dll)
-   - produk (nama/jenis produk jika ada)
-   - karakter (persona/sosok jika ada)
-   - targetAudiens (target penonton, misal: anak muda, mahasiswa, ibu, pekerja)
-   - gaya / tone (santai, profesional, natural, unik, dll)
-   - durasi (misal: 30 detik)
-   - pesanUtama (pesan inti jika ada)
-   - step (discovery, concept, drafting, ready)
-   JANGAN PERNAH menghapus targetAudiens, produk, platform, atau gaya yang sudah tersimpan di context sebelumnya!
-5. DILARANG MENGARANG FAKTA PRODUK (ANTI-FABRIKASI):
-   - Jangan pernah mengarang bahan, resep, harga, promo, atau klaim medis yang belum diberikan pengguna.
-   - Gunakan kalimat kondisional (misal: "Jika produkmu memang menggunakan...", "Ceritakan racikan khas produkmu di sini") atau placeholder panduan.
-6. Jangan gunakan istilah teknis seperti "API", "JSON", "execute", "parameter", "temperature" dsb kepada pengguna SIMPLE.
-7. Selalu berikan 3-4 "suggestedActions" (dengan awalan emoji yang relevan) yang menjadi opsi jawaban langsung dari pertanyaanmu.
-8. Jika pengguna meminta membuat karya (seperti "buatkan naskahnya", "bikin script", atau memilih aksi buat), berikan "structuredDraft": { "type": "script"|"idea"|"storyboard"|"character"|"product", "title": string, "content": string }.
-
-CONTOH STANDAR PERCAKAPAN:
-- User: "Hejo, saya mau bikin karakter perempuan yang ramah untuk video."
-  reply: "Siap. Kita buat karakternya dulu.\n\nKamu bisa langsung merancang detail penampilan, sifat, dan gaya bicara di Character DNA dengan 5 langkah mudah!"
-  suggestedActions: ["🎭 Buka Karakter Saya", "✨ Buat Karakter Sekarang", "💡 Tanya rekomendasi sifat"]
-  updatedContext: {"jenisKonten": "karakter", "gaya": "ramah", "gender": "Perempuan"}
-
-- User: "Hejo, gunakan karakter Rina."
-  reply: "Siap! Karakter \"Rina\" sudah aktif sebagai wajah dan pembawa kontenmu.\n\nKonten apa yang ingin kita buat bersama Rina hari ini?"
-  suggestedActions: ["🎬 Buatkan naskah 30 detik", "💡 Cari 3 ide konten relate", "📦 Hubungkan ke produk saya"]
-  updatedContext: {"karakter": "Rina", "gaya": "Santai & Ramah", "jenisKonten": "video"}
-
-- User: "Saya punya bisnis laundry. Target saya mahasiswa. Saya ingin membuat konten TikTok untuk menarik pelanggan baru."
-  reply: "Siap! Kita bisa buat konten TikTok untuk bisnis laundry dengan target mahasiswa, yang fokus menarik pelanggan baru.\n\nSupaya konsepnya tepat sasaran untuk mahasiswa, keunggulan utama apa yang paling ingin kamu tonjolkan?"
-  suggestedActions: ["🧺 Harga hemat kantong mahasiswa", "⚡ Cuci kilat selesai 1 hari", "🛵 Layanan antar-jemput kosan", "✨ Hasil cucian bersih & wangi"]
-  updatedContext: {"tujuan": "mendapatkan pelanggan baru", "jenisKonten": "video", "produk": "laundry", "business": "laundry", "platform": "TikTok", "targetAudiens": "mahasiswa", "audience": "mahasiswa"}
-
-- User: "Hejo, saya mau bikin video TikTok untuk kopi saya, gaya santai dan targetnya anak muda."
-  reply: "Siap. Kita buat video TikTok untuk produk kopi kamu dengan gaya santai dan target anak muda.\nKamu sudah punya foto produknya?"
-  suggestedActions: ["📷 Saya punya foto", "📦 Saya punya informasi produk", "🌱 Bantu saya mulai dari awal"]
-  updatedContext: {"tujuan": "video promosi", "jenisKonten": "video", "produk": "kopi", "platform": "TikTok", "gaya": "santai", "targetAudiens": "anak muda"}
-
-- User: "Saya punya foto" (ketika context kopi + TikTok + santai + anak muda sudah ada)
-  reply: "Keren! Dengan foto produk asli, videonya akan terasa sangat relate buat anak muda.\nMau saya buatkan naskah 30 detik untuk TikTok sekarang?"
-  suggestedActions: ["✨ Buatkan naskah 30 detik", "📦 Tambah info keunggulan produk", "🎬 Buka langsung di Studio"]
-  updatedContext: {"tujuan": "video promosi", "jenisKonten": "video", "produk": "kopi", "platform": "TikTok", "gaya": "santai", "targetAudiens": "anak muda", "hasPhoto": true, "step": "drafting"}
-  structuredDraft: { "type": "script", "title": "Naskah TikTok Kopi Santai (Target: Anak Muda)", "content": "[0-3s | Hook]: Tampilkan foto produk estetik kopi kamu dengan teks: \"Buat yang lagi butuh recharge di sela aktivitas...\"\n[3-10s | Relate ke Anak Muda]: \"Kadang yang dibutuhin bukan cuma kafein, tapi momen santai biar pikiran adem.\"\n[10-20s | Keunggulan Produk]: \"[Ceritakan racikan khas kopi kamu di sini — jika menggunakan biji lokal atau resep khusus, cantumkan di bagian ini].\"\n[20-30s | Call to Action]: \"Cobain sekarang buat nemenin hari kamu! Info lengkap dan pemesanan ada di link bio.\"" }
+   - produk (nama/kategori produk: kopi, parfum, baju, dll)
+   - targetAudiens (anak muda, mahasiswa, ibu, pekerja)
+   - gaya / tone (santai, mewah, lucu, relate, dll)
+   - durasi (misal: 20 detik, 30 detik)
+   JANGAN PERNAH mereset konteks produk atau target yang sudah disepakati sebelumnya!
+5. KETIKA PENGGUNA BINGUNG ("mau cari uang dari HP tapi belum tahu mulai dari mana"):
+   Bimbing dengan hangat dan tawarkan arah sederhana: Affiliate, Membuat konten, Menjual produk, Menawarkan jasa, atau Karya digital.
+6. KETIKA PENGGUNA MENYEBUT PRODUK ("saya punya produk parfum mau jual lewat konten"):
+   Pahami bahwa tujuannya adalah membuat konten yang membantu pemasaran produk parfum. Tawarkan sudut pandang relevan (aroma mewah, uji tahan seharian, atau cerita percaya diri).
+7. RESPON PERMINTAAN BAHASA NATURAL DENGAN CEPAT:
+   - "Buat lebih mewah" -> Ubah suasana jadi premium, pencahayaan golden hour/elegan, narasi prestise.
+   - "Buat lebih lucu" -> Ubah jadi komedi relate sehari-hari.
+   - "Tambah satu scene" -> Tambah 1 scene baru yang relevan ke structuredDraft.
+   - "Buat 5 versi" -> Sediakan 5 variasi hook/angle berbeda.
+   - "Yang ini kurang menarik" -> Tawarkan 3 opsi hook baru yang memikat.
+   - "Buat video 30 detik" -> Format 30 detik terstruktur.
+   - "Buat suara wanita yang lembut" -> Siapkan naskah dengan panduan vokal suara wanita lembut/ramah.
+   - "Jadikan lebih cocok untuk TikTok" -> Sesuaikan ke ritme cepat TikTok dengan hook 0-3 detik.
+8. DILARANG MENGARANG FAKTA PRODUK (ANTI-FABRIKASI):
+   Gunakan kalimat kondisional jika info produk belum lengkap.
+9. Selalu berikan 3-4 "suggestedActions" (dengan awalan emoji yang relevan) sebagai opsi langkah berikutnya.
+10. Jika pengguna meminta karya konkret, sertakan "structuredDraft": { "type": "script"|"idea"|"storyboard"|"character"|"product"|"flow_ready", "title": string, "content": string }.
 
 KEMBALIKAN HANYA JSON:
 {
@@ -1485,62 +1674,60 @@ Pahami maksudnya, perbarui Creator Context, dan jawab seperti teman kerja kreato
       },
     ];
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const relayContent = await relayRouterChat({
-  model: 'gemini-3.8-flash',
-  messages: [
-    {
-      role: 'system',
-      content: systemInstruction,
-    },
-    {
-      role: 'user',
-      content: promptPayload
+    // Direct fast call with timeout protection
+    const callPromise = (async () => {
+      const promptText = promptPayload
         .flatMap((item: any) =>
           (item.parts || []).map((part: any) => part.text || '')
         )
-        .join('\n'),
-    },
-  ],
-  temperature: 0.7,
-});
+        .join('\n');
 
-        const parsed = JSON.parse(relayContent || '{}');
-        const cleanContext: CreatorContext = { ...currentContext };
-        if (parsed.updatedContext && typeof parsed.updatedContext === 'object') {
-          for (const [k, v] of Object.entries(parsed.updatedContext)) {
-            if (v !== undefined && v !== null && v !== '') {
-              cleanContext[k] = v;
-            }
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: promptText,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+          responseMimeType: 'application/json',
+        },
+      });
+
+      return response.text || '';
+    })();
+
+    const timeoutPromise = new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error('AI response timeout')), 3500)
+    );
+
+    try {
+      const rawText = await Promise.race([callPromise, timeoutPromise]);
+      const parsed = JSON.parse(rawText || '{}');
+      const cleanContext: CreatorContext = { ...currentContext };
+      if (parsed.updatedContext && typeof parsed.updatedContext === 'object') {
+        for (const [k, v] of Object.entries(parsed.updatedContext)) {
+          if (v !== undefined && v !== null && v !== '') {
+            cleanContext[k] = v;
           }
         }
-
-        return {
-          reply: parsed.reply || 'Siap! Mari kita lanjutkan langkah berikutnya bersama.',
-          suggestedActions:
-            parsed.suggestedActions && parsed.suggestedActions.length > 0
-              ? parsed.suggestedActions
-              : ['Lanjut', 'Buatkan naskah', 'Simpan ke Project'],
-          updatedContext: cleanContext,
-          structuredDraft: parsed.structuredDraft || null,
-        };
-      } catch (err: any) {
-        const isTransient = isTransientError(err);
-
-        // Stop retrying if error is permanent or retries are exhausted
-        if (!isTransient || attempt >= MAX_RETRIES) {
-          break;
-        }
-
-        // Exponential backoff: ~1s, ~2s, ~4s (+ slight jitter)
-        const delay = BASE_DELAY_MS * Math.pow(2, attempt) + Math.floor(Math.random() * 200);
-        await sleep(delay);
       }
-    }
 
-    // When Gemini is busy or quota cooldown is active, serve seamlessly via local Creator Engine
-    return processLocalCreatorEngine(message, currentContext, userMode);
+      return {
+        reply: parsed.reply || 'Siap! Mari kita wujudkan konten ini bersama.',
+        suggestedActions:
+          parsed.suggestedActions && parsed.suggestedActions.length > 0
+            ? parsed.suggestedActions
+            : ['Lanjut', 'Buatkan naskah', 'Simpan ke Project'],
+        updatedContext: cleanContext,
+        structuredDraft: parsed.structuredDraft || null,
+      };
+    } catch (err: any) {
+      const errMsg = String(err?.message || '').toLowerCase();
+      if (errMsg.includes('quota') || errMsg.includes('503') || errMsg.includes('demand') || errMsg.includes('timeout')) {
+        // Cooldown for 30s to avoid repeated failing network trips
+        activateQuotaCooldown(30 * 1000);
+      }
+      return processLocalCreatorEngine(message, currentContext, userMode);
+    }
   } catch {
     return processLocalCreatorEngine(message, currentContext, userMode);
   }

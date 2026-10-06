@@ -11,7 +11,8 @@ import {
   PipelineShot,
   GoogleFlowConnection,
   HejoUser,
-  FlowGoogleAccount
+  FlowGoogleAccount,
+  FlowReadyData
 } from '../types';
 import { getAllVisualImagesFromDb, saveVisualImageToDb } from '../services/imageStorage';
 
@@ -102,7 +103,17 @@ const INITIAL_PROJECTS: ProjectItem[] = [
         cameraMovement: 'Hero product static',
       }
     ],
-    tags: ['Kopi', 'Reels', 'Produk Lokal', 'Promosi']
+    tags: ['Kopi', 'Reels', 'Produk Lokal', 'Promosi'],
+    voiceOver: {
+      audioUrl: '/generated-audio/voice_1791277826164_u794d.wav',
+      durationSeconds: 3.7,
+      text: 'Capek mikir di siang hari? Ini rahasia fokus barista favoritmu. Dibuat dari 100% biji kopi lokal petani Garut.',
+      voiceCharacter: 'Rina',
+      voiceName: 'Kore',
+      style: '☕ Sahabat & Kasual',
+      speed: 1.0,
+      createdAt: 'Hari ini',
+    },
   },
   {
     id: 'proj-2',
@@ -346,6 +357,14 @@ export function useWorkspaceStore() {
   });
 
   const [activeTab, setActiveTab] = useState<ActiveNavTab>('home');
+  const [activeFlowPack, setActiveFlowPack] = useState<FlowReadyData | null>(null);
+
+  const openFlowWorkspace = (flowData?: FlowReadyData) => {
+    if (flowData) {
+      setActiveFlowPack(flowData);
+    }
+    setActiveTab('flow');
+  };
 
   const [projects, setProjects] = useState<ProjectItem[]>(() => {
     const saved = safeGetLocalStorage('hejo_projects');
@@ -1041,5 +1060,8 @@ export function useWorkspaceStore() {
     setActiveFlowAccount,
     removeFlowAccount,
     logoutHejo,
+    activeFlowPack,
+    setActiveFlowPack,
+    openFlowWorkspace,
   };
 }

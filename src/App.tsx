@@ -14,8 +14,9 @@ import { ProjectLibraryView } from './components/ProjectLibraryView';
 import { CreativeToolsView } from './components/CreativeToolsView';
 import { MotionControlView } from './components/MotionControlView';
 import { AccountView } from './components/AccountView';
+import { FlowWorkspaceView } from './components/FlowWorkspaceView';
 import { UpdateCenterModal } from './components/UpdateCenterModal';
-import { GoogleFlowModal } from './components/GoogleFlowModal';
+import { VoiceOverModal } from './components/VoiceOverModal';
 import { Toast } from './components/Toast';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { CharacterDNA, IdeaCard, ProductDNA } from './types';
@@ -24,9 +25,62 @@ import { sendChatMessage } from './services/aiService';
 export default function App() {
   const store = useWorkspaceStore();
   const [isUpdateCenterOpen, setIsUpdateCenterOpen] = useState(false);
-  const [isGoogleFlowModalOpen, setIsGoogleFlowModalOpen] = useState(false);
+  const [isVoiceOverOpen, setIsVoiceOverOpen] = useState(false);
+  const [voiceOverInitialText, setVoiceOverInitialText] = useState('');
 
   // Cross-view actions
+  const handleOpenVoiceOver = (initialText?: string, project?: any) => {
+    if (project?.id) {
+      store.setActiveProjectId(project.id);
+    }
+    setVoiceOverInitialText(initialText || project?.script || '');
+    setIsVoiceOverOpen(true);
+  };
+
+  const handleSaveVoiceOverToProject = (audioData: {
+    audioUrl: string;
+    text: string;
+    voiceCharacter: string;
+    voiceName: string;
+    style: string;
+    speed: number;
+    durationSeconds: number;
+  }) => {
+    if (store.activeProject) {
+      store.saveProject({
+        ...store.activeProject,
+        id: store.activeProject.id,
+        title: store.activeProject.title,
+        voiceOver: {
+          audioUrl: audioData.audioUrl,
+          durationSeconds: audioData.durationSeconds,
+          text: audioData.text,
+          voiceCharacter: audioData.voiceCharacter,
+          voiceName: audioData.voiceName,
+          style: audioData.style,
+          speed: audioData.speed,
+          createdAt: new Date().toISOString(),
+        },
+      });
+    } else {
+      store.saveProject({
+        title: `Voice Over - ${audioData.voiceCharacter} (${audioData.style})`,
+        category: 'video',
+        script: audioData.text,
+        status: 'ready',
+        voiceOver: {
+          audioUrl: audioData.audioUrl,
+          durationSeconds: audioData.durationSeconds,
+          text: audioData.text,
+          voiceCharacter: audioData.voiceCharacter,
+          voiceName: audioData.voiceName,
+          style: audioData.style,
+          speed: audioData.speed,
+          createdAt: new Date().toISOString(),
+        },
+      });
+    }
+  };
   const handleOpenProjectInStudio = (title: string, script?: string) => {
     store.saveProject({
       title,
@@ -167,7 +221,6 @@ export default function App() {
         onOpenUpdateCenter={() => setIsUpdateCenterOpen(true)}
         activeProjectName={store.activeProject?.name || store.activeProject?.title}
         connection={store.googleFlowConnection}
-        onOpenConnectionModal={() => setIsGoogleFlowModalOpen(true)}
       />
 
       {/* Main View Area */}
@@ -182,12 +235,13 @@ export default function App() {
             createProject={store.createProject}
             showToast={store.showToast}
             onOpenProjectInStudio={handleOpenProjectInStudio}
+            onOpenFlowWorkspace={store.openFlowWorkspace}
+            onOpenVoiceOver={handleOpenVoiceOver}
             projects={store.projects}
             setActiveProjectId={store.setActiveProjectId}
             creatorContext={store.creatorContext}
             setCreatorContext={store.setCreatorContext}
             connection={store.googleFlowConnection}
-            onOpenConnectionModal={() => setIsGoogleFlowModalOpen(true)}
           />
         )}
 
@@ -218,6 +272,7 @@ export default function App() {
             characters={store.characters}
             saveCharacter={store.saveCharacter}
             assignCharacterToProject={store.assignCharacterToProject}
+            onOpenVoiceOver={handleOpenVoiceOver}
           />
         )}
 
@@ -268,6 +323,7 @@ export default function App() {
             setActiveProjectId={store.setActiveProjectId}
             setActiveTab={store.setActiveTab}
             showToast={store.showToast}
+            onOpenVoiceOver={handleOpenVoiceOver}
           />
         )}
 
@@ -288,9 +344,21 @@ export default function App() {
             onSetActiveFlowAccount={store.setActiveFlowAccount}
             onRemoveFlowAccount={store.removeFlowAccount}
             onLogout={store.logoutHejo}
+            onOpenFlowWorkspace={() => store.openFlowWorkspace()}
             connection={store.googleFlowConnection}
             projectCount={store.projects.length}
             setActiveTab={store.setActiveTab}
+            showToast={store.showToast}
+          />
+        )}
+
+        {store.activeTab === 'flow' && (
+          <FlowWorkspaceView
+            activeFlowAccount={store.activeFlowAccount}
+            connection={store.googleFlowConnection}
+            flowPack={store.activeFlowPack}
+            onBackToHejo={() => store.setActiveTab('home')}
+            onOpenAccount={() => store.setActiveTab('account')}
             showToast={store.showToast}
           />
         )}
@@ -326,12 +394,13 @@ export default function App() {
         onClose={() => setIsUpdateCenterOpen(false)}
       />
 
-      <GoogleFlowModal
-        isOpen={isGoogleFlowModalOpen}
-        onClose={() => setIsGoogleFlowModalOpen(false)}
-        connection={store.googleFlowConnection}
-        onConnect={store.connectGoogleFlow}
-        onDisconnect={store.disconnectGoogleFlow}
+      {/* Voice Over Modal (VANA Engine Native di HEJO) */}
+      <VoiceOverModal
+        isOpen={isVoiceOverOpen}
+        onClose={() => setIsVoiceOverOpen(false)}
+        initialText={voiceOverInitialText}
+        activeProject={store.activeProject}
+        onSaveToProject={handleSaveVoiceOverToProject}
         showToast={store.showToast}
       />
 
